@@ -1,0 +1,739 @@
+{
+  "schema_version": 1,
+  "scope": "Investigación pública para EspacioKoop Office; no implementación ni auditoría privada",
+  "count": 22,
+  "counts_by_category": {
+    "Oficina y mundo visual": 6,
+    "Coordinación y trabajo real": 8,
+    "Conocimiento, progresión e historia": 8
+  },
+  "method": "Tres agentes de investigación; consolidación y contraste documental/licencias por ARQUÍMEDES. Fuentes GitHub fijadas a SHA; documentación web adicional puede cambiar.",
+  "candidates": [
+    {
+      "repo": "a16z-infra/ai-town",
+      "category": "Oficina y mundo visual",
+      "priority": "P1",
+      "kind": "Simulación social con mundo persistente",
+      "approach": "Adaptar separación motor/agente/UI y tratamiento de inputs; comparar coste de conservar Convex.",
+      "value": "ARCHITECTURE separa aiTown, engine, agent y representación; inputs humanos/agentes y trabajo LLM asíncrono. Referencia valiosa de mundo social persistente.",
+      "caveat": "No es un gestor de repos/tareas verificadas. Acoplamiento Convex y permisos de assets externos pendientes. Memoria/socialización no prueba aprendizaje validado.",
+      "next_check": "Comparar conservar la base completa frente a extraer motor/inputs, sin duplicar coordinadores ni fuentes de estado.",
+      "origin": "Referencia de Varo; agente visual y estudio previo de ARQUÍMEDES",
+      "evidence_level": "Inspección estática de arquitectura y código",
+      "url": "https://github.com/a16z-infra/ai-town",
+      "sha": "8e05997f2409275669c8344b84a51692e83f3f33",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_note": "MIT identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/a16z-infra/ai-town/blob/8e05997f2409275669c8344b84a51692e83f3f33/LICENSE"
+      ],
+      "source_paths": [
+        "README.md",
+        "ARCHITECTURE.md",
+        "convex/agent/memory.ts"
+      ],
+      "sources": [
+        "https://github.com/a16z-infra/ai-town/blob/8e05997f2409275669c8344b84a51692e83f3f33/README.md",
+        "https://github.com/a16z-infra/ai-town/blob/8e05997f2409275669c8344b84a51692e83f3f33/ARCHITECTURE.md",
+        "https://github.com/a16z-infra/ai-town/blob/8e05997f2409275669c8344b84a51692e83f3f33/convex/agent/memory.ts"
+      ]
+    },
+    {
+      "repo": "harishkotra/agent-office",
+      "category": "Oficina y mundo visual",
+      "priority": "P1",
+      "kind": "Aplicación de oficina de agentes",
+      "approach": "Adaptar UI/escena/tablero y sustituir o reforzar ejecución privilegiada.",
+      "value": "TaskBoard, Inspector, SystemLog, LayoutEditor, Phaser/React y Colyseus. Buen donante de oficina, paneles y edición.",
+      "caveat": "Drag de mobiliario no acredita asignación real al arrastrar agentes. APIs Ollama/OpenAI-compatible son inferencia, no integración bilateral. ToolExecutor usa child_process.exec con timeout, sin aislamiento acreditado en ese archivo; writeNote registra un mensaje pero responde como si hubiera guardado una nota. Árbol Pixel Agents y assets requieren procedencia propia.",
+      "next_check": "Medir acoplamiento de UI y OfficeRoom; reemplazar ejecutor antes de cualquier herramienta real.",
+      "origin": "Referencia de Varo; agente visual y estudio previo de ARQUÍMEDES",
+      "evidence_level": "Inspección estática de código y README",
+      "url": "https://github.com/harishkotra/agent-office",
+      "sha": "b00de4e8615c02605be7b90694dccda55d5d8168",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_note": "MIT identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/harishkotra/agent-office/blob/b00de4e8615c02605be7b90694dccda55d5d8168/LICENSE"
+      ],
+      "source_paths": [
+        "README.md",
+        "packages/server/src/tools/ToolExecutor.ts",
+        "packages/ui/src/components/TaskBoard.tsx"
+      ],
+      "sources": [
+        "https://github.com/harishkotra/agent-office/blob/b00de4e8615c02605be7b90694dccda55d5d8168/README.md",
+        "https://github.com/harishkotra/agent-office/blob/b00de4e8615c02605be7b90694dccda55d5d8168/packages/server/src/tools/ToolExecutor.ts",
+        "https://github.com/harishkotra/agent-office/blob/b00de4e8615c02605be7b90694dccda55d5d8168/packages/ui/src/components/TaskBoard.tsx"
+      ]
+    },
+    {
+      "repo": "kevinshen56714/SkyOffice",
+      "category": "Oficina y mundo visual",
+      "priority": "P1",
+      "kind": "Oficina multijugador para personas",
+      "approach": "Adaptar salas, presencia y puestos; conservar solo comunicaciones necesarias.",
+      "value": "Phaser 3, Colyseus, React/Redux y PeerJS; salas, bocadillos, proximidad, puestos y pizarras. Candidato para visitar espacios del otro equipo y encontrarse en la oficina.",
+      "caveat": "No aporta despacho de agentes ni pruebas de entregas. Videoconferencia/pantalla compartida aumentan infraestructura y exposición. Assets de LimeZu deben revisarse aparte.",
+      "next_check": "Comparar reutilizar salas/sincronización con la base de Agent Office, sin añadir videollamadas por inercia.",
+      "origin": "Agente de investigación visual",
+      "evidence_level": "README; licencia contrastada por ARQUÍMEDES",
+      "url": "https://github.com/kevinshen56714/SkyOffice",
+      "sha": "3f66b8bffad889ee9fc2340f9bcad28146299f47",
+      "branch": "master",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_note": "MIT identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/kevinshen56714/SkyOffice/blob/3f66b8bffad889ee9fc2340f9bcad28146299f47/LICENSE"
+      ],
+      "source_paths": [
+        "readme.md"
+      ],
+      "sources": [
+        "https://github.com/kevinshen56714/SkyOffice/blob/3f66b8bffad889ee9fc2340f9bcad28146299f47/readme.md"
+      ]
+    },
+    {
+      "repo": "pixel-agents-hq/pixel-agents",
+      "category": "Oficina y mundo visual",
+      "priority": "P1",
+      "kind": "Oficina visual conectada a eventos",
+      "approach": "Reutilizar/adaptar editor, áreas y representación de eventos.",
+      "value": "Oficina Canvas 2D, pathfinding, estados de personajes y áreas vinculadas a carpetas; README describe AgentEvent, AgentRuntime, HookProvider y CLI independiente del editor.",
+      "caveat": "Claude Code es la referencia; otros proveedores figuran en roadmap. No demuestra control bilateral ni Kanban operativo. El proveedor lee transcripciones y el README advierte de tokens de instalación en URL/logs: no trasladar esa recogida de datos a Office. Assets externos requieren licencia individual.",
+      "next_check": "Extraer una escena alimentada solo por eventos saneados; demostrar que no necesita transcripciones ni lanzar agentes para representar su actividad.",
+      "origin": "Agente de investigación visual",
+      "evidence_level": "README/arquitectura declarada; licencia contrastada por ARQUÍMEDES",
+      "url": "https://github.com/pixel-agents-hq/pixel-agents",
+      "sha": "3537e140c2094761beae748592aeb92ece8edfdd",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_note": "MIT identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/pixel-agents-hq/pixel-agents/blob/3537e140c2094761beae748592aeb92ece8edfdd/LICENSE"
+      ],
+      "source_paths": [
+        "README.md"
+      ],
+      "sources": [
+        "https://github.com/pixel-agents-hq/pixel-agents/blob/3537e140c2094761beae748592aeb92ece8edfdd/README.md"
+      ]
+    },
+    {
+      "repo": "phaserjs/phaser",
+      "category": "Oficina y mundo visual",
+      "priority": "P2",
+      "kind": "Motor 2D, no aplicación de oficina",
+      "approach": "Reutilizar motor si la base elegida encaja; no sumar otro renderer.",
+      "value": "Escenas, cámaras, tilemaps, animación e input; encaja con las bases Phaser de SkyOffice y Agent Office.",
+      "caveat": "El README actual describe Phaser 4 y cambios incompatibles con 3. No actualizar automáticamente las aplicaciones candidatas. MIT del motor no licencia logos/personajes ni assets de terceros.",
+      "next_check": "Fijar versión compatible con la escena seleccionada y comprobar rendimiento/accesibilidad; no decidir por novedad.",
+      "origin": "Agente de investigación visual",
+      "evidence_level": "README y licencia",
+      "url": "https://github.com/phaserjs/phaser",
+      "sha": "02d8931b626d9764c133cbb3fbf99966c03c757c",
+      "branch": "master",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE.md",
+      "license_note": "MIT identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/phaserjs/phaser/blob/02d8931b626d9764c133cbb3fbf99966c03c757c/LICENSE.md"
+      ],
+      "source_paths": [
+        "README.md"
+      ],
+      "sources": [
+        "https://github.com/phaserjs/phaser/blob/02d8931b626d9764c133cbb3fbf99966c03c757c/README.md"
+      ]
+    },
+    {
+      "repo": "workadventure/workadventure",
+      "category": "Oficina y mundo visual",
+      "priority": "P3",
+      "kind": "Mundo/oficina virtual multijugador",
+      "approach": "Estudiar UX espacial; reutilización condicionada a licencia y coste.",
+      "value": "Mundos personalizables, presencia y colaboración humana; documentación de Admin API para habitaciones y privilegios.",
+      "caveat": "ARQUÍMEDES resolvió la duda inicial del investigador: back/LICENSE.txt y play/LICENSE.txt especifican AGPL v3 con Commons Clause y avisos de licencias múltiples. No tratarlo como AGPL estándar ni como componente sin restricciones de comercialización. Assets y otros paquetes pendientes.",
+      "license_note": "AGPL v3 + Commons Clause en back/play; licencias múltiples y opción comercial. Evaluar por componente y uso, no autorización genérica.",
+      "license_path": "back/LICENSE.txt",
+      "next_check": "Determinar si necesitamos esa plataforma completa; revisar condiciones del componente exacto antes de copiar.",
+      "origin": "Agente visual; licencia comprobada adicionalmente por ARQUÍMEDES",
+      "evidence_level": "README, documentación y archivos de licencia",
+      "url": "https://github.com/workadventure/workadventure",
+      "sha": "906b27552b56f4962c51e1d148e75c0f8a579438",
+      "branch": "master",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_sources": [
+        "https://github.com/workadventure/workadventure/blob/906b27552b56f4962c51e1d148e75c0f8a579438/back/LICENSE.txt",
+        "https://github.com/workadventure/workadventure/blob/906b27552b56f4962c51e1d148e75c0f8a579438/play/LICENSE.txt"
+      ],
+      "source_paths": [
+        "README.md",
+        "docs/others/self-hosting/adminAPI.md"
+      ],
+      "sources": [
+        "https://github.com/workadventure/workadventure/blob/906b27552b56f4962c51e1d148e75c0f8a579438/README.md",
+        "https://github.com/workadventure/workadventure/blob/906b27552b56f4962c51e1d148e75c0f8a579438/docs/others/self-hosting/adminAPI.md"
+      ]
+    },
+    {
+      "repo": "a2aproject/A2A",
+      "category": "Coordinación y trabajo real",
+      "priority": "P1",
+      "kind": "Especificación de interoperabilidad",
+      "approach": "Adaptar o adoptar contrato versionado, mapeándolo al contrato propuesto de Office.",
+      "value": "AgentCard, Task, Message, Artifact y eventos; contratos para descubrir capacidades, pedir trabajo, consultar progreso y recibir artefactos entre runtimes distintos.",
+      "caveat": "No es Kanban, scheduler ni autorización instalada. Cancelación/idempotencia necesitan semántica comprobada del servidor. Fijar versión de especificación/SDK; no asumir que cualquier cliente implementa la misma versión.",
+      "next_check": "Mapear petición, aceptación, entrega y revisión de Office; conservar revisión de evidencia tras completed del agente. Probar rechazo y revocación a mitad de tarea.",
+      "origin": "Agente de investigación de coordinación",
+      "evidence_level": "README y especificación documental",
+      "url": "https://github.com/a2aproject/A2A",
+      "sha": "98853be376c88df25e1704771cd3ea9ef8823a96",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_note": "Apache-2.0 identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/a2aproject/A2A/blob/98853be376c88df25e1704771cd3ea9ef8823a96/LICENSE"
+      ],
+      "source_paths": [
+        "README.md"
+      ],
+      "sources": [
+        "https://github.com/a2aproject/A2A/blob/98853be376c88df25e1704771cd3ea9ef8823a96/README.md",
+        "https://a2a-protocol.org/latest/specification/"
+      ]
+    },
+    {
+      "repo": "OpenBMB/ChatDev",
+      "category": "Coordinación y trabajo real",
+      "priority": "P1",
+      "kind": "Aplicación de composición y ejecución de flujos",
+      "approach": "Adaptar interfaz y representación de entregables; estudiar separadamente versión clásica.",
+      "value": "Main corresponde a ChatDev 2.0 DevAll: frontend Vue, plantillas/esquemas y ejecutores de grafos. DAGExecutor recorre capas y delega ejecución paralela; README documenta lienzo y observabilidad.",
+      "caveat": "La oficina clásica está en chatdev1.0; no confundirla con main. Arrastrar nodos no asigna agentes remotos automáticamente. Refrescar/reconectar frontend no prueba recuperación de caída del servidor. Assets legacy pendientes de licencia.",
+      "next_check": "Comparar grafo visual y puestos de oficina como dos vistas de la misma asignación; validar qué parte del motor conviene conservar.",
+      "origin": "Referencia de Varo; agente de coordinación y lectura selectiva de ARQUÍMEDES",
+      "evidence_level": "README y ejecutor DAG inspeccionado",
+      "url": "https://github.com/OpenBMB/ChatDev",
+      "sha": "4fb2db0ea90375ce1059f44fe03ffbd191a7a169",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_note": "Apache-2.0 identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/OpenBMB/ChatDev/blob/4fb2db0ea90375ce1059f44fe03ffbd191a7a169/LICENSE"
+      ],
+      "source_paths": [
+        "README.md",
+        "workflow/executor/dag_executor.py",
+        "workflow/graph.py"
+      ],
+      "sources": [
+        "https://github.com/OpenBMB/ChatDev/blob/4fb2db0ea90375ce1059f44fe03ffbd191a7a169/README.md",
+        "https://github.com/OpenBMB/ChatDev/blob/4fb2db0ea90375ce1059f44fe03ffbd191a7a169/workflow/executor/dag_executor.py",
+        "https://github.com/OpenBMB/ChatDev/blob/4fb2db0ea90375ce1059f44fe03ffbd191a7a169/workflow/graph.py",
+        "https://github.com/OpenBMB/ChatDev/tree/chatdev1.0"
+      ]
+    },
+    {
+      "repo": "camel-ai/camel",
+      "category": "Coordinación y trabajo real",
+      "priority": "P2",
+      "kind": "Framework de sociedades y equipos de agentes",
+      "approach": "Adaptar conversaciones acotadas o encapsular un equipo detrás de adaptador.",
+      "value": "RolePlaying y Workforce aportan roles y coordinación. El ejemplo de role-playing limita turnos y finaliza por estados de terminación o marcador CAMEL_TASK_DONE.",
+      "caveat": "El marcador no demuestra objetivo cumplido. Workers nativos emplean ChatAgent; no hay integración bilateral probada. Reflexión/acuerdo mutuos pueden reforzar errores. Resume documentado no acredita por sí solo persistencia resistente a caída.",
+      "next_check": "Evaluar una colaboración con límite de rondas y prueba externa de resultado, comparándola con ejecución directa.",
+      "origin": "Referencia de Varo; agente de coordinación y lectura selectiva de ARQUÍMEDES",
+      "evidence_level": "README y ejemplo de ejecución leído, no ejecutado",
+      "url": "https://github.com/camel-ai/camel",
+      "sha": "d198715162d219219e92f8fe24579420b4286744",
+      "branch": "master",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_note": "Apache-2.0 identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/camel-ai/camel/blob/d198715162d219219e92f8fe24579420b4286744/LICENSE"
+      ],
+      "source_paths": [
+        "README.md",
+        "examples/ai_society/role_playing.py",
+        "camel/societies/role_playing.py"
+      ],
+      "sources": [
+        "https://github.com/camel-ai/camel/blob/d198715162d219219e92f8fe24579420b4286744/README.md",
+        "https://github.com/camel-ai/camel/blob/d198715162d219219e92f8fe24579420b4286744/examples/ai_society/role_playing.py",
+        "https://github.com/camel-ai/camel/blob/d198715162d219219e92f8fe24579420b4286744/camel/societies/role_playing.py"
+      ]
+    },
+    {
+      "repo": "crewAIInc/crewAI",
+      "category": "Coordinación y trabajo real",
+      "priority": "P2",
+      "kind": "Framework de Crews y Flows",
+      "approach": "Adaptar contratos de tarea, flujo y delegación; comparar antes de adoptar coordinador Python.",
+      "value": "Tareas con expected_output/context, salidas estructuradas, Flows y memoria con ámbitos. Código de Crew conecta memoria/delegación; documentación adicional describe clientes/servidores A2A.",
+      "caveat": "Formato validado no equivale a calidad. No confundir AMP comercial con núcleo MIT. Memoria compartida/ámbitos no prueban aislamiento entre propietarios. Compatibilidad A2A concreta pendiente; conectores documentados no prueban integración con nuestros agentes.",
+      "next_check": "Comparar tareas/delegación con contrato propio y comprobar versiones A2A, revocación y coste sin migrar ambos equipos.",
+      "origin": "Referencia de Varo; agente de coordinación y lectura selectiva de ARQUÍMEDES",
+      "evidence_level": "Código selectivo/README; conector A2A localizado documentalmente, no probado",
+      "url": "https://github.com/crewAIInc/crewAI",
+      "sha": "143e902178a07d0f13f9db2308f983aaacaaf0f8",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_note": "MIT identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/crewAIInc/crewAI/blob/143e902178a07d0f13f9db2308f983aaacaaf0f8/LICENSE"
+      ],
+      "source_paths": [
+        "README.md",
+        "lib/crewai/src/crewai/crew.py",
+        "lib/crewai/src/crewai/flow/flow.py",
+        "lib/crewai/src/crewai/memory/unified_memory.py"
+      ],
+      "sources": [
+        "https://github.com/crewAIInc/crewAI/blob/143e902178a07d0f13f9db2308f983aaacaaf0f8/README.md",
+        "https://github.com/crewAIInc/crewAI/blob/143e902178a07d0f13f9db2308f983aaacaaf0f8/lib/crewai/src/crewai/crew.py",
+        "https://github.com/crewAIInc/crewAI/blob/143e902178a07d0f13f9db2308f983aaacaaf0f8/lib/crewai/src/crewai/flow/flow.py",
+        "https://github.com/crewAIInc/crewAI/blob/143e902178a07d0f13f9db2308f983aaacaaf0f8/lib/crewai/src/crewai/memory/unified_memory.py",
+        "https://docs.crewai.com/v1.15.17/en/learn/a2a-agent-delegation"
+      ]
+    },
+    {
+      "repo": "FoundationAgents/MetaGPT",
+      "category": "Coordinación y trabajo real",
+      "priority": "P2",
+      "kind": "Framework de empresa de software",
+      "approach": "Adaptar roles, SOP y entregables como procedimientos de proyecto.",
+      "value": "Producto, arquitectura e ingeniería con documentos/acciones concretos. Team implementa rondas, comprobación de presupuesto y serialización; útil para fases con entregable y responsable.",
+      "caveat": "geekan/MetaGPT redirige aquí. Team usa use_mgx=True; Architect advierte que su configuración de SOP fijo solo actúa con use_fixed_sop=True. No presentar diagramas clásicos como comportamiento por defecto actual. Sus roles no integran automáticamente agentes externos.",
+      "next_check": "Elegir un procedimiento reutilizable de producto/diseño/revisión y contrastar su recorrido efectivo antes de extraer código.",
+      "origin": "Referencia de Varo; agente de coordinación y código contrastado por ARQUÍMEDES",
+      "evidence_level": "Inspección estática de código y README",
+      "url": "https://github.com/FoundationAgents/MetaGPT",
+      "sha": "11cdf466d042aece04fc6cfd13b28e1a70341b1f",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_note": "MIT identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/FoundationAgents/MetaGPT/blob/11cdf466d042aece04fc6cfd13b28e1a70341b1f/LICENSE"
+      ],
+      "source_paths": [
+        "README.md",
+        "metagpt/team.py",
+        "metagpt/roles/architect.py"
+      ],
+      "sources": [
+        "https://github.com/FoundationAgents/MetaGPT/blob/11cdf466d042aece04fc6cfd13b28e1a70341b1f/README.md",
+        "https://github.com/FoundationAgents/MetaGPT/blob/11cdf466d042aece04fc6cfd13b28e1a70341b1f/metagpt/team.py",
+        "https://github.com/FoundationAgents/MetaGPT/blob/11cdf466d042aece04fc6cfd13b28e1a70341b1f/metagpt/roles/architect.py"
+      ]
+    },
+    {
+      "repo": "OpenBMB/AgentVerse",
+      "category": "Coordinación y trabajo real",
+      "priority": "P2",
+      "kind": "Framework de investigación multiagente",
+      "approach": "Adaptar coordinación y evaluación, comparando con otras alternativas antes de adoptar el runtime.",
+      "value": "Separación entre selección de especialistas, decisión, ejecución y evaluación; útil para reuniones con objetivo, turnos y resultado.",
+      "caveat": "El evaluador LLM y sus umbrales no sustituyen pruebas de artefactos. El ejemplo de prisioneros es el dilema del prisionero, no una prisión simulada completa. Dependencias y aislamiento entre propietarios pendientes de validar.",
+      "license_note": "Apache-2.0 en LICENSE raíz; conservar avisos aplicables si se adapta código.",
+      "sha": "f90c4bd9680fdd3bcff8c52c9170911a59b23478",
+      "license_path": "LICENSE",
+      "evidence_level": "Inspección estática de código y README",
+      "origin": "Referencia de Varo; estudio previo de ARQUÍMEDES",
+      "next_check": "Comparar una reunión acotada con asignación directa: resultado verificable, coste y ausencia de bucles.",
+      "url": "https://github.com/OpenBMB/AgentVerse",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_sources": [
+        "https://github.com/OpenBMB/AgentVerse/blob/f90c4bd9680fdd3bcff8c52c9170911a59b23478/LICENSE"
+      ],
+      "source_paths": [
+        "README.md",
+        "agentverse/environments/tasksolving_env/basic.py"
+      ],
+      "sources": [
+        "https://github.com/OpenBMB/AgentVerse/blob/f90c4bd9680fdd3bcff8c52c9170911a59b23478/README.md",
+        "https://github.com/OpenBMB/AgentVerse/blob/f90c4bd9680fdd3bcff8c52c9170911a59b23478/agentverse/environments/tasksolving_env/basic.py"
+      ]
+    },
+    {
+      "repo": "temporalio/temporal",
+      "category": "Coordinación y trabajo real",
+      "priority": "P2",
+      "kind": "Servidor de ejecución durable",
+      "approach": "Estudiar patrones de recuperación; adoptar solo si el coste de infraestructura se justifica.",
+      "value": "Workflows, activities, workers, colas y políticas de reintentos/timeouts; posible coordinación de adaptadores externos sin migrar sus agentes.",
+      "caveat": "Añade servidor y SDKs. Reintentar actividades puede repetir efectos: la aplicación debe deduplicar. Recuperar workflow no restaura automáticamente la sesión del agente ni acredita una entrega.",
+      "next_check": "Comparar con una cola/estado transaccional menor; simular interrupción antes/después de entregar sin duplicar trabajo.",
+      "origin": "Agente de investigación de coordinación",
+      "evidence_level": "README; documentación complementaria consultada por índice, no ejecución",
+      "url": "https://github.com/temporalio/temporal",
+      "sha": "bf4dd764b3b5c5d22695b3058d24a6308976b838",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_note": "MIT identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/temporalio/temporal/blob/bf4dd764b3b5c5d22695b3058d24a6308976b838/LICENSE"
+      ],
+      "source_paths": [
+        "README.md"
+      ],
+      "sources": [
+        "https://github.com/temporalio/temporal/blob/bf4dd764b3b5c5d22695b3058d24a6308976b838/README.md",
+        "https://docs.temporal.io/activity-definition",
+        "https://docs.temporal.io/activity-execution"
+      ]
+    },
+    {
+      "repo": "microsoft/autogen",
+      "category": "Coordinación y trabajo real",
+      "priority": "P3",
+      "kind": "Framework y Studio de composición multiagente",
+      "approach": "Estudiar mensajes, patrones de equipo y UX; preservar integraciones existentes, no elegirlo por defecto para un backend nuevo.",
+      "value": "Core, AgentChat y Studio separan ejecución, coordinación e interfaz; útiles como referencias de componentes y terminación.",
+      "caveat": "README declara maintenance mode y recomienda Microsoft Agent Framework. Studio advierte que no es production-ready: autenticación/seguridad no vienen resueltas. No evaluar aquí al sucesor como si se hubiera inspeccionado.",
+      "license_note": "Código MIT en LICENSE-CODE; documentación/contenido CC BY 4.0 en LICENSE. La etiqueta API sola resulta engañosa.",
+      "license_path": "LICENSE-CODE",
+      "next_check": "Comparar solo piezas concretas y coste de mantenimiento; una adopción nueva requiere revisar también el sucesor, fuera de esta selección.",
+      "origin": "Referencia de Varo; agente de coordinación y README contrastado por ARQUÍMEDES",
+      "evidence_level": "README/licencias y código selectivo",
+      "url": "https://github.com/microsoft/autogen",
+      "sha": "027ecf0a379bcc1d09956d46d12d44a3ad9cee14",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_sources": [
+        "https://github.com/microsoft/autogen/blob/027ecf0a379bcc1d09956d46d12d44a3ad9cee14/LICENSE-CODE",
+        "https://github.com/microsoft/autogen/blob/027ecf0a379bcc1d09956d46d12d44a3ad9cee14/LICENSE"
+      ],
+      "source_paths": [
+        "README.md",
+        "python/packages/autogen-studio/autogenstudio/teammanager/teammanager.py"
+      ],
+      "sources": [
+        "https://github.com/microsoft/autogen/blob/027ecf0a379bcc1d09956d46d12d44a3ad9cee14/README.md",
+        "https://github.com/microsoft/autogen/blob/027ecf0a379bcc1d09956d46d12d44a3ad9cee14/python/packages/autogen-studio/autogenstudio/teammanager/teammanager.py"
+      ]
+    },
+    {
+      "repo": "MineDojo/Voyager",
+      "category": "Conocimiento, progresión e historia",
+      "priority": "P1",
+      "kind": "Agente de Minecraft con biblioteca de habilidades",
+      "approach": "Adaptar biblioteca/recuperación de habilidades; no exigir Minecraft para nuestra oficina.",
+      "value": "Conserva código y descripciones de habilidades, las recupera semánticamente y añade nuevas al considerar superada una tarea.",
+      "caveat": "No es una plataforma multiagente bilateral por sí sola. La crítica automática también usa un LLM. Código recibido como habilidad necesita pruebas, permisos, procedencia y revocación antes de ejecutarse; no es entrenamiento de pesos.",
+      "license_note": "MIT en LICENSE raíz; revisar dependencias aparte.",
+      "sha": "55e45a880755d0c8c66ca7fb5fe7962ac8974f89",
+      "license_path": "LICENSE",
+      "evidence_level": "Inspección estática de código y README",
+      "origin": "Referencia de Varo; estudio previo de ARQUÍMEDES",
+      "next_check": "Validar una habilidad y demostrar su reutilización en una segunda tarea autorizada sin compartir memorias privadas.",
+      "url": "https://github.com/MineDojo/Voyager",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_sources": [
+        "https://github.com/MineDojo/Voyager/blob/55e45a880755d0c8c66ca7fb5fe7962ac8974f89/LICENSE"
+      ],
+      "source_paths": [
+        "README.md",
+        "voyager/agents/skill.py",
+        "voyager/agents/critic.py",
+        "voyager/voyager.py"
+      ],
+      "sources": [
+        "https://github.com/MineDojo/Voyager/blob/55e45a880755d0c8c66ca7fb5fe7962ac8974f89/README.md",
+        "https://github.com/MineDojo/Voyager/blob/55e45a880755d0c8c66ca7fb5fe7962ac8974f89/voyager/agents/skill.py",
+        "https://github.com/MineDojo/Voyager/blob/55e45a880755d0c8c66ca7fb5fe7962ac8974f89/voyager/agents/critic.py",
+        "https://github.com/MineDojo/Voyager/blob/55e45a880755d0c8c66ca7fb5fe7962ac8974f89/voyager/voyager.py"
+      ]
+    },
+    {
+      "repo": "openfga/openfga",
+      "category": "Conocimiento, progresión e historia",
+      "priority": "P1",
+      "kind": "Servicio especializado de autorización por relaciones",
+      "approach": "Comparar adopción frente a reglas propias acotadas; no confundir con login.",
+      "value": "Modelos y comprobaciones de relaciones: propietario, visitante, miembro, solicitante. Encaja con controlar agentes propios y visitar/solicitar acciones a los demás sin heredar su autoridad.",
+      "caveat": "No autentica por sí solo ni demuestra purga de cachés/leyendas. Añade servicio y modelo a mantener; la aplicación debe comprobar permisos antes de recuperar datos.",
+      "next_check": "Modelar ver, visitar, solicitar y gestionar por separado; probar revocación durante tarea y búsqueda sin filtraciones.",
+      "origin": "Agente de investigación de conocimiento; encaje con visitas propuesto por ARQUÍMEDES",
+      "evidence_level": "README y licencia; no auditoría del servicio",
+      "url": "https://github.com/openfga/openfga",
+      "sha": "450b68c5458e0749481d4cb51adc90cef5f95af6",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_note": "Apache-2.0 identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/openfga/openfga/blob/450b68c5458e0749481d4cb51adc90cef5f95af6/LICENSE"
+      ],
+      "source_paths": [
+        "README.md"
+      ],
+      "sources": [
+        "https://github.com/openfga/openfga/blob/450b68c5458e0749481d4cb51adc90cef5f95af6/README.md"
+      ]
+    },
+    {
+      "repo": "pyeventsourcing/eventsourcing",
+      "category": "Conocimiento, progresión e historia",
+      "priority": "P1",
+      "kind": "Biblioteca Python de event sourcing",
+      "approach": "Reutilizar si encaja Python; en otro stack estudiar el patrón sin cambiar el backend por esta librería.",
+      "value": "Aggregate y event, historial de cambios y proyecciones: base candidata de cronologías, entregas, correcciones y premios derivados.",
+      "caveat": "Registrar un evento no demuestra que sea verdadero. Eventos compensatorios no borran contenido sensible. Diseñar retención, corrección y eliminación en las vistas derivadas.",
+      "next_check": "Repetir una entrega sin duplicar premio; invalidar evidencia y reconstruir la cronología corregida.",
+      "origin": "Agente de investigación de conocimiento",
+      "evidence_level": "README y licencia",
+      "url": "https://github.com/pyeventsourcing/eventsourcing",
+      "sha": "575d42c10a821828639b90178ed56703abe9c9f1",
+      "branch": "9.5",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_note": "BSD-3-Clause identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/pyeventsourcing/eventsourcing/blob/575d42c10a821828639b90178ed56703abe9c9f1/LICENSE"
+      ],
+      "source_paths": [
+        "README.md"
+      ],
+      "sources": [
+        "https://github.com/pyeventsourcing/eventsourcing/blob/575d42c10a821828639b90178ed56703abe9c9f1/README.md"
+      ]
+    },
+    {
+      "repo": "robertjanetzko/LegendsBrowser2",
+      "category": "Conocimiento, progresión e historia",
+      "priority": "P1",
+      "kind": "Navegador del historial de Dwarf Fortress",
+      "approach": "Adaptar navegación/UX; valorar extracción frente al acoplamiento XML de DF.",
+      "value": "Páginas de objetos conectadas a objetos relacionados, panoramas y estadísticas. Inspiración concreta para agente → evento → proyecto → artefacto.",
+      "caveat": "Es una aplicación Go para exports XML de Dwarf Fortress, no el motor del juego. Funciones dependen de DFHack/esquema; adaptación a Office no implementada. MIT del navegador no licencia assets o contenido de DF.",
+      "next_check": "Prototipar navegación con eventos de prueba de Office; mantener ficción marcada y enlaces a hechos autorizados.",
+      "origin": "Agente de investigación de conocimiento",
+      "evidence_level": "README y licencia",
+      "url": "https://github.com/robertjanetzko/LegendsBrowser2",
+      "sha": "72838130d775a9b2efae05e61e7aa6972445c719",
+      "branch": "master",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE.md",
+      "license_note": "MIT identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/robertjanetzko/LegendsBrowser2/blob/72838130d775a9b2efae05e61e7aa6972445c719/LICENSE.md"
+      ],
+      "source_paths": [
+        "README.md"
+      ],
+      "sources": [
+        "https://github.com/robertjanetzko/LegendsBrowser2/blob/72838130d775a9b2efae05e61e7aa6972445c719/README.md"
+      ]
+    },
+    {
+      "repo": "getzep/graphiti",
+      "category": "Conocimiento, progresión e historia",
+      "priority": "P2",
+      "kind": "Framework de grafos temporales de contexto",
+      "approach": "Adaptar procedencia/relaciones o adoptar como proyección reconstruible, no autoridad única.",
+      "value": "README describe hechos cambiantes, procedencia hacia fuentes y consultas históricas. Candidato para relacionar agentes, habilidades, proyectos y artefactos.",
+      "caveat": "Procedencia no prueba verdad ni consentimiento. Coste de grafo/modelos y permisos/borrado de derivados pendientes. No importar memorias privadas. README marca Kuzu como deprecado; revisar backend exacto si se adopta.",
+      "license_note": "Apache-2.0 en la revisión comprobada; no asumir MIT a partir de referencias antiguas.",
+      "next_check": "Grafo formado solo por hechos aprobados, recuperación autorizada y reconstrucción tras revocación.",
+      "origin": "Agente de investigación de conocimiento",
+      "evidence_level": "README y licencia",
+      "url": "https://github.com/getzep/graphiti",
+      "sha": "547422865cca9fb5a82915c074d899428c145ff4",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_sources": [
+        "https://github.com/getzep/graphiti/blob/547422865cca9fb5a82915c074d899428c145ff4/LICENSE"
+      ],
+      "source_paths": [
+        "README.md"
+      ],
+      "sources": [
+        "https://github.com/getzep/graphiti/blob/547422865cca9fb5a82915c074d899428c145ff4/README.md"
+      ]
+    },
+    {
+      "repo": "NationalSecurityAgency/skills-service",
+      "category": "Conocimiento, progresión e historia",
+      "priority": "P2",
+      "kind": "SkillTree: producto de formación gamificada",
+      "approach": "Comparar subsistema de progresión con implementar mecanismos menores en Office.",
+      "value": "Servicio, dashboard, visualizaciones y clientes de integración para perfiles y logros de formación.",
+      "caveat": "No es una pequeña biblioteca ni demuestra que agentes aprendan. No acredita antifraude/idempotencia para nuestro caso; puntos solo desde evidencias aceptadas. No trasladar autoscore al agente.",
+      "next_check": "Evaluar integración mínima de un logro único y reversible, distinguiendo formación registrada de habilidad demostrada.",
+      "origin": "Agente de investigación de conocimiento; LICENSE completada por ARQUÍMEDES",
+      "evidence_level": "README y licencia",
+      "url": "https://github.com/NationalSecurityAgency/skills-service",
+      "sha": "deb07e10935cecc946246e2f8bc05a3b45758468",
+      "branch": "master",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE.txt",
+      "license_note": "Apache-2.0 identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/NationalSecurityAgency/skills-service/blob/deb07e10935cecc946246e2f8bc05a3b45758468/LICENSE.txt"
+      ],
+      "source_paths": [
+        "README.md"
+      ],
+      "sources": [
+        "https://github.com/NationalSecurityAgency/skills-service/blob/deb07e10935cecc946246e2f8bc05a3b45758468/README.md"
+      ]
+    },
+    {
+      "repo": "altera-al/project-sid",
+      "category": "Conocimiento, progresión e historia",
+      "priority": "P3",
+      "kind": "Repositorio de informe, no motor desplegable",
+      "approach": "Estudiar arquitectura y experimentos; no presupuestar reutilización de un motor no publicado.",
+      "value": "PIANO plantea coherencia entre comunicación y ejecución, especialización y coordinación colectiva.",
+      "caveat": "El árbol inspeccionado contiene documentación, PDF e imagen, no el motor PIANO. Resultados reportados por los autores, no reproducidos aquí. No trasladar sus cifras de agentes a nuestra capacidad operativa.",
+      "license_note": "Sin LICENSE raíz en la revisión inspeccionada. La licencia CC BY 4.0 del artículo no licencia un motor no publicado.",
+      "sha": "757ea101c476a012085e5645393dc501ffed5ea4",
+      "license_path": null,
+      "evidence_level": "Inspección de árbol/README y lectura del artículo",
+      "origin": "Referencia de Varo; estudio previo de ARQUÍMEDES",
+      "next_check": "Convertir coherencia entre compromisos y acciones en pruebas de estados de tareas, sin replicar una civilización completa.",
+      "url": "https://github.com/altera-al/project-sid",
+      "branch": "main",
+      "archived": false,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_sources": [],
+      "source_paths": [
+        "README.md"
+      ],
+      "sources": [
+        "https://github.com/altera-al/project-sid/blob/757ea101c476a012085e5645393dc501ffed5ea4/README.md",
+        "https://arxiv.org/html/2411.00114v1"
+      ]
+    },
+    {
+      "repo": "ShiJbey/neighborly",
+      "category": "Conocimiento, progresión e historia",
+      "priority": "P3",
+      "kind": "Framework de simulación social e historia emergente",
+      "approach": "Estudiar patrones narrativos/ECS, no convertirlo en dependencia central sin asumir mantenimiento.",
+      "value": "Rasgos, relaciones, ocupaciones y acontecimientos vitales; historial exportable. Referencia de biografías y acontecimientos conectados, inspirada en Dwarf Fortress.",
+      "caveat": "Repositorio archivado; README declara fin de mantenimiento/soporte desde abril de 2026. Datos de simulación no deben convertirse en reputación técnica de agentes/personas reales. Assets y material narrativo ajeno requieren revisión.",
+      "next_check": "Separar un patrón narrativo útil de la simulación completa y alimentar crónicas solo con eventos autorizados.",
+      "origin": "Agente de investigación de conocimiento",
+      "evidence_level": "README, estado API y licencia",
+      "url": "https://github.com/ShiJbey/neighborly",
+      "sha": "1303cee0b8c404b1e3cf439e5c1a4b74d5e4ffe3",
+      "branch": "main",
+      "archived": true,
+      "reviewed_at_utc": "2026-09-05T01:38:46+00:00",
+      "execution_tested": false,
+      "bilateral_integration_tested": false,
+      "status": "Candidato de estudio; no adoptado",
+      "license_path": "LICENSE",
+      "license_note": "MIT identificada en el archivo de licencia; dependencias y assets requieren revisión separada.",
+      "license_sources": [
+        "https://github.com/ShiJbey/neighborly/blob/1303cee0b8c404b1e3cf439e5c1a4b74d5e4ffe3/LICENSE"
+      ],
+      "source_paths": [
+        "README.md"
+      ],
+      "sources": [
+        "https://github.com/ShiJbey/neighborly/blob/1303cee0b8c404b1e3cf439e5c1a4b74d5e4ffe3/README.md"
+      ]
+    }
+  ]
+}

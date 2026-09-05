@@ -32,10 +32,13 @@ Contrato neutral de eventos y mensajes, adaptadores por entorno y permisos por e
 ## Documentación viva
 
 - [Producto y aceptación](docs/product-spec.md)
+- [Preferencias de Varo: ronda interactiva, pendientes de acuerdo](docs/product-preferences-varo.md)
 - [Arquitectura y fronteras](docs/architecture.md)
 - [Contrato interoperable propuesto](docs/interoperability.md)
 - [Alta de los dos equipos](docs/onboarding.md)
 - [Roadmap](docs/roadmap.md)
+- [Investigación compartida y catálogo de repositorios](docs/research/README.md)
+- [Debate de definición con ambos equipos](https://github.com/EspacioKoop/espaciokoop-office/issues/1)
 - [Cómo colaborar](CONTRIBUTING.md)
 - [Reglas para agentes](AGENTS.md)
 - [Seguridad](SECURITY.md)
