@@ -56,6 +56,18 @@ La revocación durante una tarea activa es un caso P0: después de retirar el ac
 7. Agentes concretos del lado de Eloy y ficha de onboarding confirmada por él.
 8. Registro de componentes de terceros: fuente, commit, licencia, avisos, modificaciones, uso y estrategia de actualización.
 
+## Condición para autorizar el arranque
+
+La fase de definición solo puede darse por cerrada cuando el [debate #1](https://github.com/EspacioKoop/espaciokoop-office/issues/1) conserve evidencia enlazable de que Varo y Eloy han aceptado la misma alternativa —o una tercera formulación común—. Esa decisión debe fijar, como mínimo:
+
+- alcance incluido y excluido de la primera vertical;
+- criterios positivos, negativos y evidencias exigidas para aceptarla;
+- fuente de verdad de tareas y estado, con responsables por adaptador y componente común;
+- alojamiento, acceso, presupuesto y datos autorizados, sin inferirlos del acceso al repositorio;
+- procedimiento de revocación, recuperación y traspaso entre ambos administradores.
+
+El acuerdo se reflejará después en esta especificación y en los documentos técnicos afectados. Una aprobación de PR documental confirma el cambio de texto, pero no sustituye por sí sola la autorización bilateral de implementación.
+
 ## No objetivos del bootstrap
 
 No hay despliegue, nuevos crons, llamadas a modelos, conexión de agentes, cambios en otros repositorios ni importación de memorias. La documentación no equivale a compatibilidad probada.
