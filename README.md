@@ -193,7 +193,7 @@ Todavía no hay demo ni instalación disponible. Cuando exista una entrega verif
 | [Producto y aceptación](docs/product-spec.md) | Base de requisitos; ampliaciones pendientes de consolidación |
 | [Arquitectura](docs/architecture.md) · [Interoperabilidad](docs/interoperability.md) | Propuestas técnicas, no contratos operativos validados |
 | [Preparación de los equipos](docs/onboarding.md) · [Roadmap](docs/roadmap.md) | Borradores de preparación y fases por acordar |
-| [Gestión de agentes #3](https://github.com/EspacioKoop/espaciokoop-office/issues/3) | Alta, conexión, configuración y ciclo de vida |
+| [Gestión de agentes](docs/agent-management.md) · [debate #3](https://github.com/EspacioKoop/espaciokoop-office/issues/3) | Contrato propuesto de alta, conexión, configuración y ciclo de vida |
 | [Cooperación #4](https://github.com/EspacioKoop/espaciokoop-office/issues/4) | Etiquetas, reservas de trabajo y revisiones |
 | [Investigación](docs/research/README.md) | Referencias y propuestas de reutilización |
 | [Contribuir](CONTRIBUTING.md) · [Reglas para agentes](AGENTS.md) · [Seguridad](SECURITY.md) | Normas aplicables a las aportaciones |
