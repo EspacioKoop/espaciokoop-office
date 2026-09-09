@@ -1,8 +1,8 @@
 # Declaración del lado de Eloy — ELOY-01 y ELOY-02
 
-**Estado:** declaración documental de dos filas de [`onboarding.md`](onboarding.md). No autoriza conectar agentes, abrir accesos ni gastar, y no cierra la preparación: las filas ELOY-03 a ELOY-06 siguen pendientes y son decisiones, no redacción.
+**Estado:** declaración documental de cuatro filas de [`onboarding.md`](onboarding.md) — ELOY-01, ELOY-02, ELOY-03 y ELOY-05. No autoriza conectar agentes, abrir accesos ni gastar. **No cierra la preparación:** ELOY-04 y ELOY-06 están en «Pendiente de acuerdo» y no dependen de mí, y las seis filas de Varo siguen sin declarar.
 
-**Alcance de lo que se declara aquí:** identidades, roles e **interfaces**, y los límites del entorno. No incluye perfiles, prompts, configuración interna, rutas, inventario de máquina ni credenciales, conforme a la columna «Comprobación saneada» de las dos filas.
+**Alcance de lo que se declara aquí:** identidades, roles e **interfaces**; los límites del entorno; qué es compartible y qué queda excluido; y presupuesto, concurrencia y parada. No incluye perfiles, prompts, configuración interna, rutas, inventario de máquina ni credenciales, conforme a la columna «Comprobación saneada» de cada fila.
 
 ## ELOY-01 — Agentes, roles e interfaces
 
@@ -47,3 +47,64 @@ Declaración de capacidades y límites, sin inventario de máquina ni rutas.
 ## Lo que esta declaración NO hace
 
 No selecciona qué agentes participan en la primera prueba (eso es ELOY-06), no declara qué proyectos ni campos son compartibles (ELOY-03), no fija presupuesto ni política de parada (ELOY-05) y no abre ningún acceso (ELOY-04). Tampoco compromete a Varo a nada: es la mitad de una checklist, no un acuerdo.
+
+## ELOY-03 — Alcance compartible, exclusiones y retención
+
+### Repositorios autorizados
+
+Autorizo **tres repositorios de la organización EspacioKoop**, uno a uno y por decisión explícita, no por pertenecer a la organización:
+
+| Repositorio | Por qué entra |
+|---|---|
+| `EspacioKoop/espaciokooplagunak` | Es donde ocurre el trabajo real de mi lado y de donde saldrá cualquier entrega que la oficina pueda representar. |
+| `EspacioKoop/espaciokoop-office` | El propio repositorio común. Su trabajo ya es bilateral y visible por definición. |
+| `EspacioKoop/espaciokooplagunakRemake` | Autorizado como **segundo proyecto**, no por tener contenido que compartir. Ver abajo. |
+
+**Todo lo demás queda fuera**, y no por omisión: mis repositorios personales, los ajenos a la organización y cualquier repositorio futuro **no** entran por el hecho de existir. Añadir uno es una decisión nueva y una modificación de este documento.
+
+### Por qué tres y no uno
+
+Un solo repositorio bastaría para demostrar la cadena de la alternativa B. Autorizo tres porque **un solo proyecto no puede demostrar el aislamiento entre proyectos**, que es el requisito 9 de [`product-spec.md`](product-spec.md) y la parte que no se puede añadir después: con un único repo, un adaptador que ignore la separación por proyecto se comporta exactamente igual que uno que la respete, y no hay forma de notar la diferencia hasta que ya hay un segundo proyecto dentro.
+
+El precio lo asumo y lo declaro: son más superficies que revisar antes de la primera entrega.
+
+### Qué se comparte
+
+**Solo metadato de tarea y de entrega:**
+
+- identificador y título de la tarea o del PR;
+- estado dentro de la cadena `requested → accepted → delivered → reviewed`;
+- autor y revisor, tal y como GitHub ya los expone;
+- enlace permanente y SHA;
+- resultado de CI: verde, rojo o ausente.
+
+### Qué NO se comparte, ni siquiera anonimizado
+
+Diffs, cuerpos de PR, comentarios, revisiones, informes de agente, transcripciones, razonamiento interno, memorias, contenido de ficheros, ramas no publicadas y cualquier repositorio no listado arriba. **El contenido del trabajo no entra en la oficina.** La cadena se demuestra con estados y enlaces; quien tenga acceso al repositorio verá el contenido allí, que es donde ya está.
+
+Anonimizar no es una salvedad: lo no autorizado no se recoge, conforme al requisito 9.
+
+### Exclusión y su prueba negativa
+
+`espaciokooplagunakRemake` es **privado**, y esa es la razón de que sirva a la vez de segundo proyecto y de caso de prueba: la separación por proyecto y la visibilidad del repositorio son cosas distintas, y una prueba honesta necesita un elemento que esté autorizado como proyecto y **no** deba filtrar nada por otra vía.
+
+Prueba negativa exigida antes de dar la fila por verificada: **un PR marcado como excluido no aparece en la oficina** —ni en un feed, ni en un recuento, ni en un resumen, ni en una caché, ni agregado con otros—, y **retirar la autorización de un repositorio retira también lo ya representado**, no solo lo nuevo. Una prueba que solo compruebe que deja de llegar material nuevo no vale: el modo de fallo real es lo que ya se copió.
+
+### Retención
+
+Lo que se represente en la oficina es **derivado y reconstruible** desde GitHub, así que no necesita retención propia. Regla que pido que se respete en el diseño: la oficina **representa**, no almacena. Una revocación tiene que poder ser total, y solo lo es si no hay una segunda copia que sobreviva a ella.
+
+## ELOY-05 — Presupuesto, concurrencia, parada y responsable
+
+Declaro la política que **corresponde a lo que hoy existe**, no la que sería mejor. Lo segundo sería declarar una capacidad no construida.
+
+- **Presupuesto:** asumido íntegramente por Eloy dentro de su entorno, con un **techo bajo declarado para la prueba bilateral**: el coste de mi lado no es un compromiso compartido y no genera gasto para Varo, ni directo ni implícito. El presupuesto conjunto, si lo hay, es COM-01 y sigue pendiente.
+- **Concurrencia:** limitada a la que hoy rinde de verdad, que es menos de la que la máquina admite. El límite efectivo no es el número de trabajadores sino la cola del proveedor de inferencia: medido, un trabajador solo rinde por encima de varios compitiendo entre sí, así que subir el número degrada en vez de escalar. No declaro cifra fija porque sería del montaje actual, no un compromiso.
+- **Parada:** **manual y local.** Existe hoy y funciona: es Eloy quien la ejecuta, en su entorno, sin depender de nada del lado común. No hay corte automático por gasto y **no lo declaro como si lo hubiera** — construirlo es trabajo, y hasta entonces la garantía real es que hay una persona que puede parar y lo sabe.
+- **Compromiso de aviso:** si la parada se ejecuta durante una prueba bilateral, se avisa a Varo y el estado de la tarea afectada queda **explícito y auditable**, no colgado. Es el mismo caso P0 de revocación de [`product-spec.md`](product-spec.md) visto desde el otro lado: una parada no puede parecerse a una entrega que nunca llegó.
+- **Responsable de incidencias:** Eloy, para todo lo que ocurra dentro de su entorno. No delegable en un agente: un agente puede detectar y reportar, pero quien responde es el propietario.
+- **Aprobaciones:** ninguna acción de mi lado que gaste, escriba fuera de los repositorios autorizados o abra un acceso ocurre sin decisión humana explícita. La autonomía llega hasta abrir un PR; no más allá.
+
+### Lo que esta política admite como límite
+
+No hay corte automático, no hay cifra de concurrencia comprometida y el responsable es una sola persona. Son tres puntos únicos de fallo y los declaro como tales. Ninguno bloquea la alternativa B —donde lo que se demuestra es una cadena sobre repositorios autorizados, no un servicio en producción—, pero los tres tendrían que resolverse antes de cualquier cosa que corra sin alguien delante.
