@@ -1,0 +1,40 @@
+name: Office Space tests
+on:
+  pull_request:
+    paths:
+      - 'packages/office-space/**'
+      - 'docs/office-space.md'
+      - '.github/workflows/space-tests.yml'
+  push:
+    branches: [main, feat/shared-office-spaces]
+    paths:
+      - 'packages/office-space/**'
+      - 'docs/office-space.md'
+      - '.github/workflows/space-tests.yml'
+permissions:
+  contents: read
+concurrency:
+  group: office-space-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6, pinned
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6, pinned
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - name: Tests
+        run: node --test packages/office-space/test/*.test.mjs
+      - name: Synthetic shared-space walkthrough
+        run: node packages/office-space/examples/shared-space.mjs
+      - name: Whitespace check
+        run: git diff --check
