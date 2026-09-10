@@ -68,3 +68,17 @@ for (const [name, modify] of [
   ['PR compartido por tareas', p => { p.projects[0].tasks[0].pullRequest = 22; }]
 ]) test(`política rechaza ${name}`, () => { const p = clone(demoPolicy); modify(p); assert.throws(() => validatePolicy(p)); });
 test('política devuelve copia aislada y hash estable', () => { const p = validatePolicy(demoPolicy); p.projects.length = 0; assert.equal(demoPolicy.projects.length, 2); assert.equal(digest('x').length, 64); });
+
+test('la política exige todos los campos y tipos de identidad explícitos', () => {
+  for (const key of ['id', 'label', 'githubLogin', 'keyHash']) {
+    const p = clone(demoPolicy); delete p.members[0][key]; assert.throws(() => validatePolicy(p));
+  }
+  const p = clone(demoPolicy); p.members[0].id = 42; p.projects[0].readers[0] = 42; p.projects[1].readers[0] = 42;
+  assert.throws(() => validatePolicy(p));
+});
+test('la revisión y asignación incompletas no se dan por confirmadas', () => {
+  assert.notEqual(task(i => { delete i.assignees.pageInfo; }).stage, 'reviewed');
+  assert.notEqual(task(i => { i.assignees.nodes.push({ login: null }); }).stage, 'reviewed');
+  assert.notEqual(task((i, p) => { p.latestReviews.nodes.push({ state: 'APPROVED', author: null, commit: { oid: SHA } }); }).stage, 'reviewed');
+  assert.equal(task((i, p) => { delete p.isDraft; }).stage, 'unavailable');
+});

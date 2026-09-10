@@ -1,6 +1,7 @@
 const $ = id => document.getElementById(id);
 const labels = { requested: 'Solicitada', accepted: 'Aceptada', delivered: 'Entregada', reviewed: 'Revisada', blocked: 'Bloqueada', unavailable: 'No verificable' };
 const chain = ['requested', 'accepted', 'delivered', 'reviewed'];
+let detailId = null;
 let info; let snapshot = null; let view = 'office'; let events; let refreshTimer; let expiryTimer; let refreshing = false; let epoch = 0;
 const node = (tag, text, className) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e; };
 function tell(message = '') { $('notice').textContent = message; }
@@ -106,6 +107,7 @@ function renderBoard() {
   }
 }
 function detail(task) {
+  detailId = task.id;
   const root = $('detail-content'); root.replaceChildren();
   root.append(pill(task.stage)); const title = node('h2', task.title, 'dialog-title'); title.id = 'detail-title'; root.append(title);
   root.append(node('p', `${task.id} · ${snapshot.mode === 'demo' ? 'Evidencia sintética' : 'Metadatos consultados en GitHub'}`, 'hint'));
@@ -133,7 +135,7 @@ function detail(task) {
     link.href = task.pullRequest?.url ?? task.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; root.append(link);
     root.append(node('p', 'Las operaciones reales ocurren en GitHub bajo sus permisos. Office no ejecuta cambios ni asigna agentes.', 'hint'));
   }
-  $('detail').showModal();
+  if (!$('detail').open) $('detail').showModal();
 }
 function watchSession() {
   if (events) events.close();
@@ -152,6 +154,10 @@ async function refresh() {
     $('refresh').hidden = false; $('logout').hidden = false;
     $('updated').textContent = `Verificado a las ${new Date(data.generatedAt).toLocaleTimeString('es-ES')}`;
     renderOffice(); renderBoard(); show(view);
+    if ($('detail').open) {
+      const current = data.projects.flatMap(p => p.tasks).find(t => t.id === detailId);
+      if (current) detail(current); else $('detail').close();
+    }
     tell(data.mode === 'demo' ? 'MODO DE EVALUACIÓN · Datos sintéticos. No hay agentes reales conectados ni llamadas a modelos.' : 'SOLO LECTURA · Selección explícita de metadatos; las operaciones se realizan en GitHub.');
     clearTimeout(expiryTimer); clearTimeout(refreshTimer);
     expiryTimer = setTimeout(() => clearView('La vista ha caducado sin una comprobación nueva. Datos retirados.'), Math.max(0, data.expiresAt - Date.now()));
@@ -170,7 +176,7 @@ $('key-login').addEventListener('submit', event => { event.preventDefault(); log
 $('logout').addEventListener('click', async () => { try { await api('/api/logout', {}); } finally { clearView('Sesión cerrada.'); } });
 $('refresh').addEventListener('click', refresh); $('search').addEventListener('input', renderBoard);
 $('close-detail').addEventListener('click', () => $('detail').close());
-$('detail').addEventListener('close', () => $('detail-content').replaceChildren());
+$('detail').addEventListener('close', () => { detailId = null; $('detail-content').replaceChildren(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) clearView(); else refresh(); });
 window.addEventListener('pagehide', () => clearView()); window.addEventListener('pageshow', () => { if (info) refresh(); });
 window.addEventListener('offline', () => clearView('Sin conexión. Se han retirado los datos.'));

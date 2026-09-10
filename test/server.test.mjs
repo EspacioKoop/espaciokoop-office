@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { request as rawRequest } from 'node:http';
 import assert from 'node:assert/strict';
 import { createOffice } from '../src/server.mjs';
 import { DemoSource, demoPolicy } from '../src/fixtures.mjs';
@@ -13,9 +14,13 @@ async function start(t, options = {}) {
   return { app, origin, request, login };
 }
 test('servidor local: controles de origen, sesión y contenido', async t => {
-  const { request, login } = await start(t);
+  const { request, login, origin } = await start(t);
   assert.equal((await request('/api/snapshot')).status, 401);
-  assert.equal((await request('/', { headers: { host: 'evil.invalid' } })).status, 403);
+  const badHost = await new Promise((resolve, reject) => {
+    const req = rawRequest(origin, { headers: { host: 'evil.invalid' } }, res => { res.resume(); resolve(res.statusCode); });
+    req.on('error', reject); req.end();
+  });
+  assert.equal(badHost, 403);
   assert.equal((await request('/api/session', { data: { key: 'demo-aurora' }, headers: { origin: 'https://evil.invalid' } })).status, 403);
   assert.equal((await request('/', { headers: { 'sec-fetch-site': 'cross-site' } })).status, 403);
   assert.equal((await request('/api/session', { data: { key: 'demo-aurora', actor: 'marea' } })).status, 400);

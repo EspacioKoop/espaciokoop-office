@@ -14,7 +14,7 @@ const repoPattern = /^[a-z0-9][a-z0-9-]{0,38}\/[a-z0-9_.-]{1,100}$/i;
 const positive = x => Number.isSafeInteger(x) && x > 0;
 function exact(value, keys) {
   insist(value && typeof value === 'object' && !Array.isArray(value), 'POLICY', 'Objeto de política no válido.');
-  insist(Object.keys(value).every(k => keys.includes(k)), 'POLICY', 'Campo de política no admitido.');
+  insist(Object.keys(value).length === keys.length && Object.keys(value).every(k => keys.includes(k)), 'POLICY', 'Campo de política no admitido.');
 }
 export function validatePolicy(raw) {
   exact(raw, ['version', 'members', 'projects']);
@@ -23,10 +23,10 @@ export function validatePolicy(raw) {
   const ids = new Set(); const logins = new Set(); const hashes = new Set();
   for (const m of raw.members) {
     exact(m, ['id', 'label', 'githubLogin', 'keyHash']);
-    insist(/^[a-z0-9-]{1,40}$/.test(m.id) && !ids.has(m.id), 'POLICY', 'Identidad duplicada o no válida.');
+    insist(typeof m.id === 'string' && /^[a-z0-9-]{1,40}$/.test(m.id) && !ids.has(m.id), 'POLICY', 'Identidad duplicada o no válida.');
     insist(typeof m.label === 'string' && m.label.length > 0 && m.label.length <= 80, 'POLICY', 'Nombre de equipo no válido.');
-    insist(loginPattern.test(m.githubLogin) && !logins.has(m.githubLogin.toLowerCase()), 'POLICY', 'Cuenta de GitHub duplicada o no válida.');
-    insist(/^[a-f0-9]{64}$/.test(m.keyHash) && !hashes.has(m.keyHash), 'POLICY', 'Hash de acceso no válido o reutilizado.');
+    insist(typeof m.githubLogin === 'string' && loginPattern.test(m.githubLogin) && !logins.has(m.githubLogin.toLowerCase()), 'POLICY', 'Cuenta de GitHub duplicada o no válida.');
+    insist(typeof m.keyHash === 'string' && /^[a-f0-9]{64}$/.test(m.keyHash) && !hashes.has(m.keyHash), 'POLICY', 'Hash de acceso no válido o reutilizado.');
     ids.add(m.id); logins.add(m.githubLogin.toLowerCase()); hashes.add(m.keyHash);
   }
   insist(Array.isArray(raw.projects) && raw.projects.length <= 8, 'POLICY', 'Proyectos no válidos.');
@@ -78,7 +78,7 @@ export function projectTask(project, selection, issue, pr, policy) {
   const requester = ownerOf(policy, result.author);
   result.evidence.push({ kind: 'requested', label: 'Solicitud en GitHub', url: result.url });
   const assignees = nodes(issue.assignees).map(who).filter(Boolean);
-  if (issue.assignees?.pageInfo?.hasNextPage || assignees.length > 1) {
+  if (issue.assignees?.pageInfo?.hasNextPage !== false || assignees.length > 1 || assignees.length !== nodes(issue.assignees).length) {
     result.stage = 'blocked'; result.reasons.push('La asignación no identifica un único responsable.'); return result;
   }
   result.assignee = assignees[0] ?? null;
@@ -97,7 +97,7 @@ export function projectTask(project, selection, issue, pr, policy) {
     result.stage = 'unavailable'; result.reasons.push('No se puede verificar el PR seleccionado.'); return result;
   }
   if (pr) {
-    if (pr.number !== selection.pullRequest || !/^[a-f0-9]{40}$/.test(pr.headRefOid ?? '') || !['OPEN', 'CLOSED', 'MERGED'].includes(pr.state)) {
+    if (typeof pr.isDraft !== 'boolean' || pr.number !== selection.pullRequest || !/^[a-f0-9]{40}$/.test(pr.headRefOid ?? '') || !['OPEN', 'CLOSED', 'MERGED'].includes(pr.state)) {
       result.stage = 'unavailable'; result.reasons.push('Metadatos de entrega no válidos.'); return result;
     }
     const commit = nodes(pr.commits).at(-1)?.commit;
@@ -116,7 +116,7 @@ export function projectTask(project, selection, issue, pr, policy) {
     const reviews = nodes(pr.latestReviews);
     const complete = pr.latestReviews?.pageInfo?.hasNextPage === false;
     const reviewers = reviews.map(r => who(r.author)?.toLowerCase()).filter(Boolean);
-    const unique = new Set(reviewers).size === reviewers.length;
+    const unique = reviewers.length === reviews.length && new Set(reviewers).size === reviewers.length;
     const changes = reviews.some(r => r.state === 'CHANGES_REQUESTED') || pr.reviewDecision === 'CHANGES_REQUESTED';
     const approval = reviews.find(r => r.state === 'APPROVED' && r.commit?.oid === pr.headRefOid && ownerOf(policy, who(r.author))?.id === requester.id);
     if (!complete || !unique) result.reasons.push('La revisión está incompleta o es ambigua; no se acredita cierre.');
