@@ -1,0 +1,28 @@
+name: Office Space tests
+on:
+  pull_request:
+    paths:
+      - 'packages/office-space/**'
+      - 'docs/office-space.md'
+      - '.github/workflows/space-tests.yml'
+  push:
+    branches: [main, feat/shared-office-spaces]
+    paths:
+      - 'packages/office-space/**'
+      - 'docs/office-space.md'
+      - '.github/workflows/space-tests.yml'
+permissions:
+  contents: read
+jobs:
+  space:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm test --prefix packages/office-space
+      - run: npm run demo --prefix packages/office-space
