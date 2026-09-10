@@ -1,0 +1,14 @@
+{
+  "name": "espaciokoop-office",
+  "version": "1.0.0-rc.1",
+  "private": true,
+  "type": "module",
+  "description": "Oficina local de colaboración, con GitHub como fuente de verdad.",
+  "engines": { "node": ">=22.16.0" },
+  "scripts": {
+    "start": "node src/server.mjs --demo",
+    "start:live": "node src/server.mjs --live",
+    "test": "node --test test/*.test.mjs",
+    "check": "node tools/check.mjs"
+  }
+}
