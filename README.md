@@ -1,8 +1,8 @@
 # EspacioKoop Office
 
-**Oficina local de colaboración, con GitHub como fuente de verdad.**
+**Una oficina colaborativa remota para Varo, Eloy y sus agentes, con GitHub como fuente de tareas.**
 
-Estado de esta rama: **candidato ejecutable `1.0.0-rc.1`**, no versión estable ni producto completo aceptado. Incluye una interfaz de oficina, tablero de tareas, evidencias y un conector de metadatos de solo lectura. No conecta todavía agentes reales ni implementa toda la visión de juego.
+El objetivo es compartir oficina **desde redes distintas**, no limitar el producto a una misma casa o LAN. Estado de esta rama: **núcleo e interfaz evaluables localmente, `1.0.0-rc.1`**, todavía sin integrar el servicio remoto. No es una versión estable ni el producto completo aceptado. El servidor de loopback es un entorno de evaluación, no la arquitectura final de la oficina compartida.
 
 <p align="center">
   <img src="assets/screenshots/office-preview.webp" alt="Captura real del candidato Office en Chromium: oficina, equipos de ejemplo, métricas y proyectos seleccionados." width="600" />
@@ -10,7 +10,7 @@ Estado de esta rama: **candidato ejecutable `1.0.0-rc.1`**, no versión estable 
 
 *Captura real de la interfaz con datos inventados. La sala es una ilustración ambiental original; no acredita presencia ni actividad de agentes. El entorno de comprobación necesitó un puente HTTP local: [resultados y límites de la validación](docs/validation-1.0.md).*
 
-## Probarlo localmente
+## Evaluar el núcleo y la interfaz
 
 Node.js **22.16 o posterior**. Sin dependencias de runtime que instalar.
 
@@ -20,12 +20,14 @@ git switch feat/office-1.0-candidate
 npm start
 ```
 
-Abre `http://127.0.0.1:4173`. El servidor escucha solo en loopback. Entra como **Aurora** y sigue el recorrido guiado con **Marea**: solicitud, aceptación, entrega y revisión. Son equipos y resultados sintéticos; no hay credenciales, agentes, llamadas a modelos ni conexiones exteriores en este modo. Cerrar el proceso reinicia el ejemplo.
+Abre `http://127.0.0.1:4173`. En este candidato el servidor escucha solo en loopback. Entra como **Aurora** y sigue el recorrido guiado con **Marea**: solicitud, aceptación, entrega y revisión. Son equipos y resultados sintéticos; no hay credenciales, agentes, llamadas a modelos ni conexiones exteriores en este modo. Cerrar el proceso reinicia el ejemplo.
 
 ```sh
 npm run check
 npm test
 ```
+
+**No publiques este servidor local cambiando únicamente su dirección de escucha o añadiendo un proxy.** Sus supuestos de sesión, origen y autorización son locales; la composición con el servicio remoto requiere sus propias pruebas. El puerto 4173 no es una entrega de colaboración entre ambos equipos.
 
 ## Qué existe en este candidato
 
@@ -46,22 +48,30 @@ La asociación entre issue y PR se declara en la política local. La proyección
 
 **62/62 pruebas automatizadas**, cero fallos y diez módulos comprobados sin errores de sintaxis. **Ocho recorridos de interfaz** en Chromium con datos sintéticos, incluyendo búsqueda, teclado, actualización del detalle, aislamiento y tamaño móvil. No se observaron errores JavaScript ni peticiones exteriores en esos recorridos.
 
-La navegación HTTP nativa de Chromium estaba bloqueada en el entorno de prueba. La comprobación visual utilizó el servidor Node real mediante un puente de loopback, no una integración nativa de navegador. **Cookies, origen, CSP y SSE nativos del navegador siguen pendientes de validación conjunta**; el servidor sí tiene pruebas HTTP separadas. No se afirma auditoría de seguridad ni CI remoto.
+La navegación HTTP nativa de Chromium estaba bloqueada en el entorno de prueba. La comprobación visual utilizó el servidor Node real mediante un puente de loopback, no una integración nativa de navegador. **Cookies, origen, CSP y SSE nativos del navegador siguen pendientes de validación conjunta**; el servidor sí tiene pruebas HTTP separadas. No se afirma auditoría de seguridad ni CI remoto de este núcleo.
 
 [Informe completo](docs/validation-1.0.md) · [Informe del navegador](assets/screenshots/browser-report.json) · [Blobs exactos comprobados](docs/tested-blobs.json)
 
+## Integración remota y trabajo paralelo
+
+En [#13](https://github.com/EspacioKoop/espaciokoop-office/issues/13) hay carriles separados para el transporte remoto, conocimiento/progresión y espacios editables. Las PR [#15](https://github.com/EspacioKoop/espaciokoop-office/pull/15) y [#16](https://github.com/EspacioKoop/espaciokoop-office/pull/16) contienen **candidatos alternativos de espacios**, no dos capas para fusionar ciegamente. Sus resultados de pruebas no validan este núcleo ni una integración conjunta.
+
+Esas piezas no están incorporadas en esta rama. La composición debe construir la identidad en el backend autenticado, autorizar cada recurso antes del efecto, ampliar explícitamente los comandos permitidos, persistir antes de confirmar e invalidar vistas tras el commit. Posición de avatar no equivale a presencia; editar mobiliario no asigna trabajo. El servicio común y sus almacenes pertenecen al alojamiento remoto, no a una oficina independiente por cliente.
+
+El núcleo actual solo lee tareas: **no implementa todavía los comandos remotos de creación, aceptación, entrega o revisión ni su idempotencia duradera**. No devolver éxito a esos comandos por proyectar una tarea o avanzar fixtures. No activar conocimiento con datos de Eloy fuera de su selección de metadatos.
+
 ## Qué falta para una 1.0 estable
 
-Faltan revisión independiente del SHA, alcance y alojamiento acordados por ambos propietarios, incorporación y prueba de los agentes reales, validación de la combinación concreta de permisos/API, y un ciclo bilateral real con fallo, revocación y recuperación.
+Faltan composición remota real, revisión independiente del SHA, alcance y alojamiento acordados por ambos propietarios, incorporación y prueba de los agentes reales, validación de permisos/API, y un ciclo bilateral real con fallo, revocación y recuperación.
 
-También siguen sin implementar la gestión del ciclo de vida de agentes, coedición multijugador, avatares controlables, sistemas RPG e inventario, aprendizaje validado, premios, estasis, leyendas y periódico. **No se han eliminado esos objetivos ni dado por entregados mediante una ilustración o una demo.**
+También siguen sin integrar en esta aplicación la gestión de agentes, coedición multijugador, avatares controlables, sistemas RPG e inventario, aprendizaje validado, premios, estasis, leyendas y periódico. **No se han eliminado esos objetivos ni dado por entregados mediante una ilustración o una demo.**
 
 La visión anterior se conserva **íntegra y sin modificaciones** en [VISION.md](VISION.md), usando el mismo blob del README previo. Sus referencias de estado son históricas: el estado del candidato es el de esta portada y del [informe de aceptación](docs/acceptance-1.0.md). Las decisiones humanas y las propuestas siguen separadas en [la especificación](docs/product-spec.md) y [el debate #1](https://github.com/EspacioKoop/espaciokoop-office/issues/1).
 
 ## Documentación y cooperación
 
-[Guía de ejecución y política local](RUNNING.md) · [Alcance y puertas de aceptación](docs/acceptance-1.0.md) · [Normas de agentes](AGENTS.md) · [Contribuir](CONTRIBUTING.md) · [Seguridad](SECURITY.md) · [Investigación de referencias](docs/research/README.md)
+[Guía de evaluación y política local](RUNNING.md) · [Alcance y puertas de aceptación](docs/acceptance-1.0.md) · [Normas de agentes](AGENTS.md) · [Contribuir](CONTRIBUTING.md) · [Seguridad](SECURITY.md) · [Investigación de referencias](docs/research/README.md)
 
-Trabajo reservado en [#13](https://github.com/EspacioKoop/espaciokoop-office/issues/13), en rama propia. Se preservan los documentos de las PR #10 y #12. No se modifica infraestructura de los propietarios, no se conceden permisos a otro equipo, no se despliega y no se publica una etiqueta estable.
+Trabajo del núcleo en [#14](https://github.com/EspacioKoop/espaciokoop-office/pull/14), con coordinación en #13. Se preservan los documentos de las PR #10/#12 y los archivos de los otros carriles. Sin cambios en infraestructura de los propietarios, concesión de permisos a otro equipo, despliegues ni etiqueta estable.
 
 Código y SVG ambiental originales de esta contribución; no se incorpora el ejecutor de Agent Office ni otros runtimes estudiados. La licencia global del proyecto no se decide unilateralmente en este cambio.
