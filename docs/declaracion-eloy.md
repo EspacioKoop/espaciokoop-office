@@ -1,4 +1,4 @@
-# Declaración del lado de Eloy — ELOY-01 y ELOY-02
+# Declaración del lado de Eloy — ELOY-01, ELOY-02, ELOY-03 y ELOY-05
 
 **Estado:** declaración documental de cuatro filas de [`onboarding.md`](onboarding.md) — ELOY-01, ELOY-02, ELOY-03 y ELOY-05. No autoriza conectar agentes, abrir accesos ni gastar. **No cierra la preparación:** ELOY-04 y ELOY-06 están en «Pendiente de acuerdo» y no dependen de mí, y las seis filas de Varo siguen sin declarar.
 
@@ -41,12 +41,12 @@ Declaración de capacidades y límites, sin inventario de máquina ni rutas.
 - **Inferencia:** varios proveedores tras un enrutador propio, con rotación y sustitución. Deliberadamente **fuera del contrato**: qué modelo atiende un encargo no debe ser observable desde el lado de Varo ni condicionar el adaptador.
 - **Concurrencia:** varios trabajadores en paralelo. El límite efectivo no es el número, sino la cola del proveedor: medido, un trabajador que corre solo rinde muy por encima de lo que rinde compitiendo consigo mismo. Cualquier cifra que declare hoy sería del montaje actual y no un compromiso.
 - **Fiabilidad, medida:** en la última tanda evaluada, **la mayoría de las entregas de cola fueron rechazadas en triaje** — más de tres de cada cinco, frente a una de cada cinco antes de endurecer el criterio de aceptación. La cifra es una medición propia sobre mi kanban, **no reproducible desde fuera**, y la doy como límite honesto, no como métrica de producto. Lo que se deduce de ella es lo único que pido que se traslade al diseño: **el volumen de una cola no es su rendimiento**, y ningún premio, reputación ni progresión puede derivar de entregas contadas antes de revisarlas.
-- **Coste:** asumido por Eloy dentro de su entorno. Nada de lo declarado aquí implica gasto compartido; el presupuesto conjunto es ELOY-05 y COM-01, y sigue pendiente.
-- **Parada:** existe y es local. Formalizarla como responsable, procedimiento y aviso a la otra parte es ELOY-05, no esta fila.
+- **Coste:** asumido por Eloy dentro de su entorno. La política de presupuesto de mi lado queda declarada en ELOY-05; cualquier presupuesto conjunto, incluido COM-01, sigue pendiente de acuerdo bilateral.
+- **Parada:** existe y es local. La política de responsable, procedimiento y aviso queda declarada en ELOY-05; lo que no existe todavía es un corte automático por gasto.
 
 ## Lo que esta declaración NO hace
 
-No selecciona qué agentes participan en la primera prueba (eso es ELOY-06), no declara qué proyectos ni campos son compartibles (ELOY-03), no fija presupuesto ni política de parada (ELOY-05) y no abre ningún acceso (ELOY-04). Tampoco compromete a Varo a nada: es la mitad de una checklist, no un acuerdo.
+No selecciona qué agentes participan en la primera prueba (ELOY-06) ni abre ningún acceso (ELOY-04). ELOY-03 y ELOY-05 quedan **declarados documentalmente**, no verificados operativamente: la prueba negativa de exclusión/revocación sigue pendiente de ejecución y cualquier presupuesto o acuerdo común —incluido COM-01— sigue pendiente. Tampoco compromete a Varo a nada: es la mitad de una checklist, no un acuerdo bilateral.
 
 ## ELOY-03 — Alcance compartible, exclusiones y retención
 
