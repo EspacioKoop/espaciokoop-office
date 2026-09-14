@@ -1,0 +1,12 @@
+{
+  "name": "@espaciokoop/office-space",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "exports": { ".": "./src/space.mjs", "./store": "./src/store.mjs" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "demo": "node examples/shared-space.mjs"
+  }
+}
