@@ -1,4 +1,6 @@
 import { createServer } from 'node:http';
+import { createServer as createSecureServer } from 'node:https';
+import { isIP } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +8,8 @@ import { resolve } from 'node:path';
 import { OfficeError, insist, digest, validatePolicy, authenticate, authorizedProjects, publicMember, projectSnapshot } from './domain.mjs';
 import { GitHubSource } from './github.mjs';
 import { DemoSource } from './fixtures.mjs';
+import { createSpaceBridge, spaceFailure } from './space-bridge.mjs';
+import { SpaceError, createSpaceState } from '../packages/office-space/src/space.mjs';
 
 export const VERSION = '1.0.0-rc.1';
 const TTL = 12000;
@@ -23,24 +27,58 @@ const security = {
   'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 };
 function json(res, status, value, headers = {}) {
+  const req = res.req;
+  const unreadBody = !req.readableEnded && (Number(req.headers['content-length']) > 0 ||
+    /(?:^|,)\s*chunked\s*(?:,|$)/i.test(req.headers['transfer-encoding'] ?? ''));
+  if (status >= 400 && unreadBody) {
+    // Never drain an attacker-controlled body after rejection. Keep the writable
+    // side alive until the complete error (including 413) has been flushed.
+    const socket = req.socket;
+    req.pause(); socket.pause(); res.shouldKeepAlive = false;
+    headers = { ...headers, Connection: 'close' };
+    res.once('finish', () => socket.destroy());
+  }
   res.writeHead(status, { ...security, 'Content-Type': 'application/json; charset=utf-8', ...headers });
   res.end(JSON.stringify(value));
 }
 async function body(req, allowed) {
   insist(req.headers['content-type']?.split(';')[0] === 'application/json', 'CONTENT_TYPE', 'Se requiere JSON.', 415);
   const chunks = []; let length = 0;
-  for await (const chunk of req) {
+  // Keep the connection writable on rejection; no unbounded buffering/draining.
+  for await (const chunk of req.iterator({ destroyOnReturn: false })) {
     length += chunk.length;
     insist(length <= 2048, 'BODY_LIMIT', 'Petición demasiado grande.', 413);
     chunks.push(chunk);
   }
   let data;
   try { data = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new OfficeError('JSON', 'JSON no válido.'); }
-  insist(data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).every(k => allowed.includes(k)), 'FIELDS', 'Campos no admitidos.');
+  insist(data && typeof data === 'object' && !Array.isArray(data) && (!allowed || Object.keys(data).every(k => allowed.includes(k))), 'FIELDS', 'Campos no admitidos.');
   return data;
 }
 
-export function createOffice({ mode = 'demo', policyPath, source, policyLoader, now = Date.now, watchInterval = 750 } = {}) {
+// Administrator-only settings. Never derive transport trust from forwarded headers.
+export function serviceConfiguration(env = {}) {
+  const bind = env.OFFICE_BIND === 'localhost' ? '127.0.0.1' : (env.OFFICE_BIND ?? '127.0.0.1');
+  insist(isIP(bind), 'CONFIG', 'OFFICE_BIND debe ser una dirección literal o localhost.');
+  const loopback = (isIP(bind) === 4 && bind.startsWith('127.')) || bind === '::1';
+  let publicOrigin;
+  if (env.OFFICE_PUBLIC_ORIGIN !== undefined) {
+    let u;
+    try { u = new URL(env.OFFICE_PUBLIC_ORIGIN); } catch { throw new OfficeError('CONFIG', 'OFFICE_PUBLIC_ORIGIN no válido.'); }
+    insist(['http:', 'https:'].includes(u.protocol) &&
+      [u.origin, `${u.origin}/`].includes(env.OFFICE_PUBLIC_ORIGIN), 'CONFIG', 'OFFICE_PUBLIC_ORIGIN debe ser un origen sin credenciales, ruta ni parámetros.');
+    publicOrigin = u.origin;
+  }
+  const key = env.OFFICE_TLS_KEY; const cert = env.OFFICE_TLS_CERT;
+  insist((key === undefined && cert === undefined) || (typeof key === 'string' && key.length && typeof cert === 'string' && cert.length), 'CONFIG', 'Configura conjuntamente OFFICE_TLS_KEY y OFFICE_TLS_CERT.');
+  insist(!key || publicOrigin?.startsWith('https://'), 'CONFIG', 'TLS requiere un origen https explícito.');
+  insist(loopback || publicOrigin, 'CONFIG', 'Un servicio no local requiere OFFICE_PUBLIC_ORIGIN.');
+  insist(loopback || key || env.OFFICE_PRIVATE_TUNNEL === '1', 'CONFIG', 'Sin TLS, OFFICE_PRIVATE_TUNNEL=1 se permite únicamente detrás de un túnel cifrado privado.');
+  return { bind, publicOrigin, tls: key ? { key: readFileSync(key), cert: readFileSync(cert) } : undefined };
+}
+
+export function createOffice({ mode = 'demo', policyPath, source, policyLoader, now = Date.now, watchInterval = 750, config = {} } = {}) {
+  const transport = serviceConfiguration(config);
   insist(['demo', 'live'].includes(mode), 'MODE', 'Modo no válido.');
   const demo = mode === 'demo' ? (source ?? new DemoSource()) : null;
   const remote = source ?? (demo || new GitHubSource({ token: process.env.OFFICE_GITHUB_TOKEN }));
@@ -54,7 +92,13 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
     try { return validatePolicy(load()); } catch { throw new OfficeError('POLICY_UNAVAILABLE', 'La política local no está disponible o no es válida. Acceso retirado.', 503); }
   }
   // Fallo cerrado al arrancar; no se sustituye una configuración rota por una demo.
-  policy();
+  const initialPolicy = policy();
+  const projectId = config.OFFICE_SPACE_PROJECT ?? (demo ? 'demo/observatorio' : undefined);
+  if (projectId !== undefined || config.OFFICE_SPACE_DIR !== undefined) {
+    insist(projectId && (demo || config.OFFICE_SPACE_DIR), 'CONFIG', 'Configura OFFICE_SPACE_PROJECT y OFFICE_SPACE_DIR para espacios persistentes.');
+    createSpaceState(projectId);
+    insist(initialPolicy.projects.some(p => p.repo === projectId), 'CONFIG', 'El proyecto de oficina debe existir en la política.');
+  }
   const sessions = new Map(); const streams = new Map(); const busy = new Set();
   let attempts = 0; let windowStart = now(); let activeReads = 0;
   const publicSession = s => ({ memberId: s.memberId, expiresAt: s.expiresAt });
@@ -69,13 +113,50 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
     for (const res of streams.get(id) ?? []) { res.write('event: revoke\ndata: {}\n\n'); res.end(); }
     streams.delete(id);
   }
-  const server = createServer(async (req, res) => {
+  const spaceBusy = new Set();
+  function spaceGuard(req) {
+    // Initial authentication has the same AUTH contract as the core API.
+    const { id, session } = getSession(req, policy());
+    const assertAuthorized = () => {
+      let p;
+      try {
+        p = policy(); const current = getSession(req, p);
+        if (current.id !== id || current.session !== session) throw new Error();
+      } catch {
+        revoke(id);
+        throw new SpaceError('ACCESS_REVOKED');
+      }
+      // A valid member lacking this project keeps their core session and SSE.
+      if (projectId && !authorizedProjects(p, session.memberId).some(p => p.repo === projectId)) throw new SpaceError('FORBIDDEN');
+      return true;
+    };
+    assertAuthorized();
+    return { id, session, assertAuthorized };
+  }
+  function invalidateSpace() {
+    // A single configured project; only its currently authorised sessions get a signal.
+    for (const [id, responses] of streams) {
+      const s = sessions.get(id);
+      let p;
+      try { p = policy(); } catch { revoke(id); continue; }
+      if (!s || s.expiresAt <= now() || s.policyHash !== digest(JSON.stringify(p))) { revoke(id); continue; }
+      if (!authorizedProjects(p, s.memberId).some(p => p.repo === projectId)) continue;
+      for (const res of responses) {
+        if (!res.write('event: space\ndata: {}\n\n')) res.end();
+      }
+    }
+  }
+  const spaces = createSpaceBridge({ mode, directory: config.OFFICE_SPACE_DIR, projectId, now, onCommit: invalidateSpace });
+  const handler = async (req, res) => {
     try {
       const port = server.address()?.port;
-      insist([`127.0.0.1:${port}`, `localhost:${port}`].includes(req.headers.host), 'HOST', 'Host no permitido.', 403);
+      const hosts = transport.publicOrigin ? [new URL(transport.publicOrigin).host] : [`127.0.0.1:${port}`, `localhost:${port}`];
+      insist(hosts.includes(req.headers.host), 'HOST', 'Host no permitido.', 403);
       insist(!req.headers['sec-fetch-site'] || ['same-origin', 'none'].includes(req.headers['sec-fetch-site']), 'ORIGIN', 'Acceso entre sitios no permitido.', 403);
-      if (req.method === 'POST') insist(req.headers.origin === `http://${req.headers.host}`, 'ORIGIN', 'Origen no permitido.', 403);
-      const url = new URL(req.url, `http://${req.headers.host}`);
+      const origin = transport.publicOrigin ?? `http://${req.headers.host}`;
+      if (req.method === 'POST') insist(req.headers.origin === origin, 'ORIGIN', 'Origen no permitido.', 403);
+      insist(req.url.startsWith('/') && !req.url.startsWith('//'), 'URL', 'Ruta no válida.');
+      const url = new URL(req.url, origin);
       insist(!url.search, 'QUERY', 'No se admiten parámetros arbitrarios.');
       if (req.method === 'GET' && assets.has(url.pathname)) {
         const [file, type] = assets.get(url.pathname);
@@ -92,18 +173,39 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
         const id = randomBytes(32).toString('hex');
         const session = { memberId: member.id, policyHash: digest(JSON.stringify(p)), expiresAt: now() + 3600000 };
         sessions.set(id, session);
-        return json(res, 200, publicSession(session), { 'Set-Cookie': `office=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600` });
+        return json(res, 200, publicSession(session), { 'Set-Cookie': `office=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600${transport.publicOrigin?.startsWith('https://') ? '; Secure' : ''}` });
+      }
+      if ((req.method === 'GET' && url.pathname === '/api/space') || (req.method === 'POST' && url.pathname === '/api/space/command')) {
+        let activeId;
+        try {
+          const { id, session, assertAuthorized } = spaceGuard(req);
+          if (spaceBusy.has(id) || spaceBusy.size >= 4) return json(res, 429, { error: 'RATE_LIMIT' });
+          activeId = id; spaceBusy.add(id);
+          if (req.method === 'GET') return json(res, 200, await spaces.read(session.memberId, assertAuthorized));
+          if (!session.spaceWindow || now() - session.spaceWindow.at >= 60000) session.spaceWindow = { at: now(), count: 0 };
+          if (++session.spaceWindow.count > 60) return json(res, 429, { error: 'RATE_LIMIT' });
+          // No field is discarded: the package owns the exact per-command schemas.
+          const command = await body(req);
+          const result = await spaces.apply(session.memberId, assertAuthorized, command);
+          return json(res, 200, result);
+        } catch (error) {
+          if (error instanceof OfficeError && ['AUTH', 'POLICY_UNAVAILABLE', 'CONTENT_TYPE', 'BODY_LIMIT', 'JSON', 'FIELDS'].includes(error.code)) {
+            return json(res, error.status, { error: error.code });
+          }
+          const failure = spaceFailure(error);
+          return json(res, failure.status, failure.body);
+        } finally { if (activeId) spaceBusy.delete(activeId); }
       }
       const p = policy(); const { id, session } = getSession(req, p);
       if (req.method === 'POST' && url.pathname === '/api/logout') {
         await body(req, []); revoke(id);
-        return json(res, 200, { ok: true }, { 'Set-Cookie': 'office=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0', 'Clear-Site-Data': '"cache", "storage"' });
+        return json(res, 200, { ok: true }, { 'Set-Cookie': `office=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${transport.publicOrigin?.startsWith('https://') ? '; Secure' : ''}`, 'Clear-Site-Data': '"cache", "storage"' });
       }
       if (req.method === 'GET' && url.pathname === '/api/events') {
         const connected = streams.get(id) ?? new Set();
         insist(connected.size < 3, 'RATE_LIMIT', 'Demasiadas conexiones de sesión.', 429);
         res.writeHead(200, { ...security, 'Content-Type': 'text/event-stream', Connection: 'keep-alive' });
-        res.write(': Office: solo señales de revocación, nunca metadatos de tareas.\n\n');
+        res.write(': Office: invalidación y revocación, nunca datos.\n\n');
         connected.add(res); streams.set(id, connected);
         res.on('close', () => { connected.delete(res); if (!connected.size) streams.delete(id); });
         return;
@@ -147,7 +249,8 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
       const safe = error instanceof OfficeError ? error : new OfficeError('INTERNAL', 'Operación no disponible. No se conserva la vista.', 500);
       json(res, safe.status, { error: safe.code, message: safe.message });
     }
-  });
+  };
+  const server = transport.tls ? createSecureServer(transport.tls, handler) : createServer(handler);
   server.requestTimeout = 15000; server.headersTimeout = 10000;
   const watcher = setInterval(() => {
     let hash;
@@ -155,12 +258,15 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
     for (const [id, s] of sessions) if (s.expiresAt <= now() || s.policyHash !== hash) revoke(id);
   }, watchInterval);
   watcher.unref();
-  const close = () => new Promise(resolveClose => {
+  const close = async () => {
     clearInterval(watcher);
     for (const id of sessions.keys()) revoke(id);
-    server.close(resolveClose); server.closeAllConnections();
-  });
-  return { server, close };
+    const stopped = new Promise(resolveClose => server.close(resolveClose));
+    server.closeAllConnections();
+    await stopped;
+    await spaces.close();
+  };
+  return { server, close, bind: transport.bind };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -169,9 +275,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     insist(args.length === 1 && ['--demo', '--live'].includes(args[0]), 'MODE', 'Usa --demo o --live explícitamente.');
     const port = Number(process.env.OFFICE_PORT ?? 4173);
     insist(Number.isSafeInteger(port) && port >= 1024 && port <= 65535, 'PORT', 'Puerto no válido.');
-    const app = createOffice({ mode: args[0].slice(2), policyPath: process.env.OFFICE_POLICY });
-    app.server.on('error', () => { console.error('No se puede abrir el puerto local. Comprueba OFFICE_PORT.'); process.exitCode = 1; });
-    app.server.listen(port, '127.0.0.1', () => console.log(`Office ${VERSION} · ${args[0].slice(2)} · http://127.0.0.1:${port}`));
+    const app = createOffice({ mode: args[0].slice(2), policyPath: process.env.OFFICE_POLICY, config: process.env });
+    app.server.on('error', async () => { console.error('No se puede abrir el servicio. Comprueba la configuración.'); await app.close(); process.exitCode = 1; });
+    app.server.listen(port, app.bind, () => console.log(`Office ${VERSION} · ${args[0].slice(2)} · ${process.env.OFFICE_PUBLIC_ORIGIN ?? `http://127.0.0.1:${port}`}`));
     for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await app.close(); process.exit(0); });
   } catch (error) { console.error(error instanceof OfficeError ? error.message : 'Configuración no válida.'); process.exitCode = 1; }
 }
