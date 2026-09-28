@@ -1,4 +1,4 @@
-import { OfficeError, insist } from './domain.mjs';
+import { insist } from './domain.mjs';
 
 const agentIdPattern = /^[a-z0-9][a-z0-9-]{0,39}\/[a-z0-9][a-z0-9-]{0,39}$/;
 const repoPattern = /^[a-z0-9][a-z0-9-]{0,38}\/[a-z0-9_.-]{1,100}$/i;
