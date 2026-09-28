@@ -1,0 +1,16 @@
+{
+  "package.json": "37e8e9a7a111a1b24da76d168cc48e87c34497e7",
+  "src/domain.mjs": "50e15511366ebbf5ac7d15f446e330edb7f6b6be",
+  "src/fixtures.mjs": "bf31f8f18b6e2aa99b6c342af5c87b4b390b37bd",
+  "src/github.mjs": "be5aa250f6ddb11a9822846d76e46e16ed75eb36",
+  "src/server.mjs": "ad6ebdfbfa7ebf048b58f53bda38bb4eb8ea1621",
+  "test/domain.test.mjs": "b499381b3563962038e5437d866da037eced1da3",
+  "test/github.test.mjs": "7d326e462a22bba6785e712201ca0a64ce5cdcc9",
+  "test/server.test.mjs": "241c82077a648d29663ab355ebb7eb192a19ce13",
+  "tools/check.mjs": "d3c47fd48141b1fa9fd8e74c50d65f7a32c40c0c",
+  "tools/create-local-policy.mjs": "5dc9060efa513786afadf4d90607de5551bec612",
+  "web/app.mjs": "ca5ffbffe400e4e723dd00cafacf3950acf789d6",
+  "web/index.html": "ab56b3ee9511918aa348385d9b838e909a560078",
+  "web/office.svg": "6a964b1ca73681ae9380181662b6e44b490dc89e",
+  "web/style.css": "b5acad995dddbabe255e0453a5fee57edca5ed71"
+}

@@ -1,0 +1,21 @@
+{
+  "checks": [
+    "Inicio, dos proyectos, aviso sintético y escritorio sin desbordamiento",
+    "Detalle semántico y cierre con Escape",
+    "Marea no recibe ni representa el proyecto privado de Aurora",
+    "El detalle abierto se actualiza al cambiar la evidencia de origen",
+    "Cadena bilateral sintética completa con dos identidades de prueba",
+    "Búsqueda, apertura por teclado, cuatro evidencias y tablero",
+    "Vista móvil de 390 píxeles sin desbordamiento horizontal",
+    "Desconexión vacía el DOM de tareas"
+  ],
+  "passed": 8,
+  "javascript_errors": [],
+  "external_requests": [],
+  "mode": "synthetic-only",
+  "transport": "loopback-bridge",
+  "native_browser_security_verified": false,
+  "browser": "Chromium",
+  "viewport": [1440, 1120],
+  "mobile": [390, 844]
+}

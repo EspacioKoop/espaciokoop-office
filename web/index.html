@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark"><meta name="description" content="Oficina local de colaboración con evidencias verificables.">
+  <title>EspacioKoop Office</title><link rel="stylesheet" href="/style.css"><script type="module" src="/app.mjs"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Saltar al contenido</a>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navegación principal">
+      <a class="brand" href="/" aria-label="EspacioKoop Office, inicio"><span class="mark" aria-hidden="true">EK</span><span>ESPACIOKOOP<strong>Office</strong></span></a>
+      <p class="eyebrow">ESPACIO DE TRABAJO</p>
+      <nav><button id="nav-office" aria-current="page"><span aria-hidden="true">▦</span> La oficina</button><button id="nav-work"><span aria-hidden="true">☷</span> Trabajo y evidencias</button><button id="nav-about"><span aria-hidden="true">◎</span> Estado del proyecto</button></nav>
+      <div class="sidebar-note"><span class="dot" aria-hidden="true"></span><strong>Local por diseño</strong><p>Sin modelos, telemetría ni recursos externos en la interfaz.</p></div>
+      <div class="account"><div id="account-name">Sin sesión</div><button id="logout" hidden>Cerrar sesión</button></div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar"><div><span class="eyebrow">CAMPUS / COLABORACIÓN</span><h1 id="page-title">La oficina</h1></div><div class="top-actions"><span id="mode" class="tag">Cargando</span><span class="tag muted">Candidato 1.0</span><button id="refresh" hidden>Actualizar</button></div></header>
+      <div id="notice" role="status" aria-live="polite"></div>
+      <main id="main" tabindex="-1">
+        <section id="login" class="login card">
+          <span class="eyebrow">BIENVENIDO A OFFICE</span><h2>Un lugar para<br>construir juntos.</h2><p>La oficina muestra el trabajo que se puede comprobar. Las historias empiezan por una entrega real.</p>
+          <div id="demo-login" hidden><p class="hint">Recorrido sintético: estos equipos son inventados. No hay agentes reales conectados.</p><button class="primary" data-login="demo-aurora">Entrar como Aurora</button><button data-login="demo-marea">Entrar como Marea</button></div>
+          <form id="key-login" hidden><label for="access-key">Clave de acceso local</label><input id="access-key" name="key" type="password" required autocomplete="off" maxlength="512"><p class="hint">Es la clave generada localmente para Office, nunca tu token de GitHub.</p><button class="primary" type="submit">Entrar en la oficina</button></form>
+        </section>
+        <section id="office-view" hidden></section>
+        <section id="work-view" hidden><div class="section-head"><div><span class="eyebrow">FUENTE ÚNICA / GITHUB</span><h2>Trabajo y evidencias</h2></div><label class="search-label" for="search">Buscar tarea<input id="search" type="search" placeholder="Título o número…" maxlength="120"></label></div><div id="board"></div></section>
+        <section id="about-view" class="card prose" hidden><span class="eyebrow">ESTADO HONESTO</span><h2>Una base verificable, no una 1.0 aceptada.</h2><p>Este candidato implementa una oficina local y una proyección de metadatos de GitHub. El modo de evaluación usa datos inventados y funciona sin conexión exterior.</p><h3>Qué se puede comprobar</h3><p>Selección de proyectos y tareas, aislamiento por equipo, aceptación mediante autoasignación, entrega vinculada por el propietario, revisión independiente sobre el SHA actual y CI en verde.</p><h3>Qué no hace todavía</h3><p>No crea ni conecta agentes Hermes, no ejecuta herramientas, no certifica identidades individuales tras una cuenta compartida y no ofrece coedición o juego RPG. Las acciones reales se realizan en GitHub, con sus permisos.</p><h3>Antes de publicar una versión estable</h3><p>Faltan la revisión independiente, la decisión bilateral de alcance y alojamiento, y un recorrido autorizado con ambos equipos reales. Las pruebas sintéticas no sustituyen esa aceptación.</p><h3>Privacidad y revocación</h3><p>El modo conectado consulta solo números y campos seleccionados. No pide cuerpos, diffs, conversaciones o archivos. No guarda tareas en disco. Un cambio de política invalida las sesiones; cada vista caduca y se retira si no se puede renovar.</p></section>
+      </main>
+      <footer><span>ESPACIOKOOP OFFICE</span><span>El trabajo se verifica. La presencia no se presupone.</span><span id="updated">Sin datos</span></footer>
+    </div>
+  </div>
+  <dialog id="detail" aria-labelledby="detail-title"><div class="dialog-top"><span class="eyebrow">TRAZABILIDAD DE LA COLABORACIÓN</span><button id="close-detail" aria-label="Cerrar detalle">Cerrar ×</button></div><div id="detail-content"></div></dialog>
+</body>
+</html>
