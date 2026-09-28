@@ -82,6 +82,15 @@ Revocar acceso en GitHub se detecta en la siguiente consulta, **no de forma inst
 
 Cerrar sesión retira el contenido mostrado y la cookie. Cerrar el proceso elimina las sesiones y los datos sintéticos. No hay trabajo asíncrono persistente, cron, despliegue, gasto de modelos o archivos de trabajo que recuperar.
 
+## Servicio común: candidato de #21
+
+Esta rama añade configuración de origen, escucha, TLS opcional y API de espacios,
+sin interfaz nueva. La ejecución local sin variables adicionales se conserva.
+Consulta [la guía de servicio común](docs/remote-collaboration.md) para las
+variables del administrador, HTTPS, túnel privado, persistencia y límites.
+La verificación final está pendiente: no integrar ni desplegar este candidato.
+No se han probado dos redes reales, despliegue ni uso por personas.
+
 ## Frontera técnica y procedencia
 
 Node.js y las APIs del navegador; cero dependencias de runtime, sin CDN ni recursos remotos. Código y SVG ambiental originales de esta contribución. No se incorpora código, arte o ejecutores de los upstream estudiados. La licencia global del proyecto sigue pendiente: este incremento no la decide unilateralmente.
