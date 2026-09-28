@@ -27,7 +27,8 @@ const project = (s) => typeof s === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63
 const label = (s) => typeof s === 'string' && s.trim() === s && s.length >= 1 && s.length <= 80 && !/[\x00-\x1f\x7f<>\u202a-\u202e\u2066-\u2069]/u.test(s);
 const exact = (value, keys) => {
   requireThat(value && Object.getPrototypeOf(value) === Object.prototype &&
-    Reflect.ownKeys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key)));
+    Reflect.ownKeys(value).length === keys.length && keys.every((key) =>
+      Object.hasOwn(Object.getOwnPropertyDescriptor(value, key) ?? {}, 'value')));
 };
 const unique = (values) => new Set(values).size === values.length;
 const canonical = (value) => JSON.stringify(Object.fromEntries(Object.keys(value).sort().map((key) => [key, value[key]])));
@@ -42,7 +43,12 @@ export function assertSpaceContext(state, context, capability = 'space.read') {
   requireThat(typeof context.assertAuthorized === 'function', 'INVALID_CONTEXT');
   requireThat(!context.signal?.aborted, 'ACCESS_REVOKED');
   // The host must provide a synchronous guard, never a client-supplied boolean.
-  const valid = context.assertAuthorized();
+  let valid;
+  try {
+    valid = context.assertAuthorized();
+    // Reject asynchronous guards without leaving their rejection unhandled.
+    if (valid && typeof valid.then === 'function') Promise.resolve(valid).catch(() => {});
+  } catch { fail('ACCESS_REVOKED'); }
   requireThat(valid === undefined || valid === true, 'ACCESS_REVOKED');
 }
 function canEdit(room, context) {
@@ -68,19 +74,20 @@ function fits(room, item) {
 }
 function validItem(item) {
   exact(item, ['id', 'kind', 'x', 'y', 'rotation']);
-  requireThat(id(item.id) && Object.hasOwn(CATALOGUE, item.kind) && integer(item.x, 0, 63) &&
+  requireThat(id(item.id) && typeof item.kind === 'string' && Object.hasOwn(CATALOGUE, item.kind) && integer(item.x, 0, 63) &&
     integer(item.y, 0, 63) && [0, 90, 180, 270].includes(item.rotation));
 }
 function commandShape(command) {
-  requireThat(command && Object.hasOwn(FIELDS, command.type));
-  exact(command, [...BASE, ...FIELDS[command.type]]);
+  const type = command && Object.getOwnPropertyDescriptor(command, 'type')?.value;
+  requireThat(typeof type === 'string' && Object.hasOwn(FIELDS, type));
+  exact(command, [...BASE, ...FIELDS[type]]);
   requireThat(id(command.idempotency_key) && integer(command.expected_revision));
   for (const field of ['room_id', 'item_id']) if (Object.hasOwn(command, field)) requireThat(id(command[field]));
   if (Object.hasOwn(command, 'label')) requireThat(label(command.label));
   if (Object.hasOwn(command, 'width')) requireThat(integer(command.width, 4, 64) && integer(command.height, 4, 64));
   if (Object.hasOwn(command, 'x')) requireThat(integer(command.x, 0, 63) && integer(command.y, 0, 63));
   if (Object.hasOwn(command, 'rotation')) requireThat([0, 90, 180, 270].includes(command.rotation));
-  if (Object.hasOwn(command, 'kind')) requireThat(Object.hasOwn(CATALOGUE, command.kind));
+  if (Object.hasOwn(command, 'kind')) requireThat(typeof command.kind === 'string' && Object.hasOwn(CATALOGUE, command.kind));
   if (Object.hasOwn(command, 'scope')) requireThat(['common', 'personal'].includes(command.scope));
 }
 
@@ -128,7 +135,7 @@ export function validateSpaceState(state) {
     });
     state.events.forEach((event, index) => {
       exact(event, ['revision', 'type', 'actor_id', 'room_id', 'at']);
-      requireThat(event.revision === state.revision - state.events.length + index + 1 && Object.hasOwn(FIELDS, event.type) &&
+      requireThat(event.revision === state.revision - state.events.length + index + 1 && typeof event.type === 'string' && Object.hasOwn(FIELDS, event.type) &&
         id(event.actor_id) && (event.room_id === null || id(event.room_id)) && integer(event.at));
     });
     return state;

@@ -164,5 +164,6 @@ test('lÃ­mite de recibos falla cerrado sin expulsar claves y permitir reejecuciÃ
     key: `k-${i}`, hash: '0'.repeat(64), result: { revision: i + 1, resource_revision: i + 1 } }));
   s.events = Array.from({ length: LIMITS.events }, (_, i) => ({ revision: s.revision - LIMITS.events + i + 1,
     type: 'avatar.leave', actor_id: 'human-a', room_id: null, at: 1 }));
-  validateSpaceState(s); throws(() => run(s, roomCommand()), 'CAPACITY_EXCEEDED');
+  validateSpaceState(s); assert.equal(spaceView(s, context()).capacity.commands_remaining, 0);
+  throws(() => run(s, roomCommand()), 'CAPACITY_EXCEEDED');
 });
