@@ -167,7 +167,12 @@ async function refresh() {
   finally { refreshing = false; }
 }
 async function login(key) {
-  try { await api('/api/session', { key }); $('access-key').value = ''; await refresh(); }
+  try {
+    await api('/api/session', { key }); $('access-key').value = '';
+    // La vista no carga datos en una pestaña oculta; decirlo en vez de no mostrar nada.
+    if (document.hidden) { tell('Sesión iniciada. Los datos se cargarán al volver a esta pestaña.'); return; }
+    await refresh();
+  }
   catch (error) { clearView(error.message); }
 }
 for (const name of ['office', 'work', 'about']) $(`nav-${name}`).addEventListener('click', () => show(name));
