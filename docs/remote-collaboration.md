@@ -1,9 +1,10 @@
 # Servicio común: candidato de la primera parte de #21
 
-Preparado por **Astra Taller (equipo de Varo)**. Depende del núcleo de #14.
+Preparado por **Astra Taller (equipo de Varo)**. Incorpora `main` con #14 integrada.
 Solo código y pruebas sintéticas: **no desplegado ni aceptado por personas**.
-La interfaz y la presencia no forman parte de esta ronda. Esta entrega está
-pausada antes de la verificación final; no debe integrarse todavía.
+La interfaz y la presencia no forman parte de esta ronda. Los controles locales
+completos pasan dos veces seguidas; la PR sigue en borrador por la comparación
+pendiente de las regresiones de esta ronda contra el candidato anterior.
 
 ## Configuración del administrador
 
@@ -67,19 +68,35 @@ del commit. Un cambio de política revoca todas las sesiones anteriores,
 conservando la semántica conservadora del núcleo; no solo la del miembro editado.
 El vigilante SSE comprueba revocación cada 750 ms, además de las peticiones.
 
+Sin sesión válida al entrar, ambas rutas de espacios devuelven **401 `AUTH`**,
+igual que el núcleo. Una sesión ya autenticada que pierde su validez durante
+la operación devuelve **403 `ACCESS_REVOKED`** y emite `event: revoke` por SSE.
+En cambio, **403 `FORBIDDEN` no revoca la sesión**: un miembro sin permiso para
+ese espacio conserva su acceso al núcleo y su canal SSE. La comprobación con
+Marea consulta `/api/snapshot` después del rechazo y exige que siga dando 200.
+
 Un commit confirmado emite `event: space` con `data: {}` a las sesiones del
 proyecto. Es una invalidación, no estado, presencia ni confirmación visual.
 El cliente debe releer la API; al reconectar también debe releer, porque no
 existe replay de eventos SSE. Los duplicados no generan otro commit/evento.
 La interfaz actual todavía no consume estas señales de espacio.
 
-Errores tipados: permisos/revocación 403, recurso inexistente 404,
+Errores tipados: autenticación inicial 401, permisos/revocación en curso 403, recurso inexistente 404,
 conflictos/ocupación/capacidad 409, entrada inválida 400, bloqueo de almacén
 503. `COMMIT_UNCERTAIN` es 503 y exige releer/reintentar la misma clave, no
 asumir rollback. Fallos de disco/corrupción devuelven `SPACE_UNAVAILABLE`
 (503), sin mensajes de excepción ni rutas. JSON excesivo devuelve 413,
 Content-Type incorrecto 415 y límites de peticiones 429. Se admite una
 operación de espacio por sesión, cuatro globales y 60 comandos/minuto/sesión.
+
+Toda respuesta de error del núcleo o de espacios, si aún no se ha consumido
+el cuerpo declarado (`Content-Length` positivo o `chunked`), lleva
+`Connection: close`. Se pausa la lectura y se destruye el socket después de
+enviar la respuesta completa, sin drenar el cuerpo restante. También se
+entrega el 413 antes del cierre. Las pruebas usan un cliente TCP que mantiene
+abierta su mitad de escritura para no confundir un FIN con el cese de lectura:
+declaran 50 MiB (o usan chunks sin terminar) y exigen el cierre antes de intentar
+enviar 1 MiB adicional tras la respuesta. No es una prueba de carga de producción.
 
 ## Persistencia y límites
 
@@ -91,17 +108,42 @@ los límites y el protocolo de recuperación documentados por el paquete:
 No borrar recibos ni robar bloqueos. Antes de datos reales deben acordarse
 capacidad, retención, backups y recuperación con ambos administradores.
 
-## Evidencia y pendiente
+## Evidencia y límites de la ronda 3
 
-La base de #14 pasó 62/62 pruebas del núcleo y 123/123 del paquete, sin cambios.
-El primer control completo del candidato dio 85/86 en el núcleo ampliado:
-un proceso de prueba no arrancó. La API pasó después aisladamente. Se ha
-cambiado su arnés para asignar el puerto atómicamente dentro del hijo;
-**falta repetir el control completo sobre ese arnés final**. No se presenta
-ese ajuste como causa demostrada ni como corrección verificada del fallo.
+La [revisión independiente del candidato anterior](https://github.com/EspacioKoop/espaciokoop-office/pull/25#issuecomment-5869328130)
+repitió 86/86 del núcleo tres veces, 123/123 del paquete y CI en verde sobre
+`5edb9cfd54401a0559dac8316c64eed11346d6ff`. Ese resultado no se atribuye al nuevo SHA.
 
-Pendientes: regresiones contra la base, revisión independiente, CI del SHA
-final y autorización de integración. No están probados despliegue real,
-dos redes reales, uso por personas, navegación conjunta de esta API,
+Tras las correcciones, **dos ejecuciones completas consecutivas** en Node
+22.23.2 dieron el mismo resultado:
+
+| Control | Ejecución 1 | Ejecución 2 |
+|---|---|---|
+| `npm run check` | 13 módulos, 0 errores | 13 módulos, 0 errores |
+| `npm test` | 114/114 | 114/114 |
+| `node --test packages/office-space/test/*.test.mjs` | 123/123 | 123/123 |
+
+Cero fallos, canceladas u omitidas en ambas ejecuciones finales. Hay 28 casos
+nuevos: conservación de sesión tras `FORBIDDEN`, `AUTH` inicial y rechazo de
+cuerpos parciales en las dos familias de rutas. La prueba existente de operación
+en curso exige ahora el código exacto `ACCESS_REVOKED` además del evento SSE,
+con una barrera que acredita que la petición pasó la autenticación inicial.
+
+Un intento previo de esta ronda terminó con 112/114: fallaron dos arranques y uno
+registró `pthread_create: Resource temporarily unavailable`. Se acotaron los
+pools de hilos de los procesos hijos de prueba, sin elevar el presupuesto ni
+cambiar el servidor. Después pasaron las dos ejecuciones completas anteriores.
+Esto no demuestra retrospectivamente la causa del antiguo 85/86.
+
+**Bloqueo para PR_READY:** la preparación de la copia aislada de
+`5edb9cfd54401a0559dac8316c64eed11346d6ff` fue denegada por el control de seguridad.
+No se ha eludido esa aprobación ni demostrado todavía qué casos nuevos fallan
+contra ese SHA. La siguiente acción es autorizar esa preparación y ejecutar la
+comparación, distinguiendo regresiones de cobertura de comportamiento conservado.
+El SHA publicado, el resultado de CI y el estado de la entrega se registran en
+la [PR #25](https://github.com/EspacioKoop/espaciokoop-office/pull/25).
+
+Siguen pendientes la revisión de las correcciones y la autorización de integración.
+No están probados despliegue, dos redes reales, uso por personas, navegador conjunto,
 apagón físico ni certificados de producción. No se cierran #21, #1, #3 o #11.
 Rollback de código: descartar esta rama; no se ha migrado dato real alguno.

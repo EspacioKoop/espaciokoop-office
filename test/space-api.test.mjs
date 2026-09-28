@@ -32,8 +32,9 @@ async function fixture(t, { demo = false, project = 'demo/observatorio' } = {}) 
       app.server.listen(0, '127.0.0.1', () => process.send({ port: app.server.address().port }));
       process.once('SIGTERM', async () => { await app.close(); process.exit(0); });
     `;
-    const child = spawn(process.execPath, ['--input-type=module', '--eval', script], {
-      env: { ...env, TMPDIR: temporaryRoot, OFFICE_POLICY: policyPath,
+    // Keep concurrent child processes within a small thread budget.
+    const child = spawn(process.execPath, ['--v8-pool-size=1', '--input-type=module', '--eval', script], {
+      env: { ...env, UV_THREADPOOL_SIZE: '1', TMPDIR: temporaryRoot, OFFICE_POLICY: policyPath,
         OFFICE_SPACE_PROJECT: project, OFFICE_SPACE_DIR: directory }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
     let output = ''; child.stdout.on('data', c => { output += c; }); child.stderr.on('data', c => { output += c; });
@@ -83,6 +84,32 @@ async function fixture(t, { demo = false, project = 'demo/observatorio' } = {}) 
   return { start, policy, savePolicy, directory, temporaryRoot, root,
     filename: join(directory, `${createHash('sha256').update(project).digest('hex')}.json`) };
 }
+for (const method of ['GET', 'POST']) {
+  test(`regresión r3: ${method} FORBIDDEN conserva snapshot y sesión SSE de Marea`, async t => {
+    const f = await fixture(t, { project: 'demo/archivo' }); const app = await f.start();
+    const b = await app.login('marea'); const stream = await app.events(b);
+    assert.equal((await app.request('/api/snapshot', { cookie: b })).status, 200);
+    const denied = method === 'GET' ? await app.request('/api/space', { cookie: b }) : await app.command(b, createRoom());
+    assert.equal(denied.status, 403); assert.deepEqual(await denied.json(), { error: 'FORBIDDEN' });
+    const snapshot = await app.request('/api/snapshot', { cookie: b });
+    assert.equal(snapshot.status, 200); assert.equal((await snapshot.json()).memberId, 'marea');
+    assert.doesNotMatch(stream.text(), /event: revoke/);
+    // Explicit logout must still reach the same stream: it was not silently lost.
+    assert.equal((await app.request('/api/logout', { cookie: b, data: {} })).status, 200);
+    await stream.wait('event: revoke');
+  });
+
+  test(`regresión r3: ${method} espacio sin sesión válida responde 401 AUTH`, async t => {
+    const f = await fixture(t); const app = await f.start();
+    const loggedOut = await app.login('marea');
+    assert.equal((await app.request('/api/logout', { cookie: loggedOut, data: {} })).status, 200);
+    for (const cookie of [undefined, 'office=invalid', `office=${'a'.repeat(64)}`, loggedOut]) {
+      const response = method === 'GET' ? await app.request('/api/space', { cookie }) : await app.command(cookie, createRoom());
+      assert.equal(response.status, 401); assert.deepEqual(await response.json(), { error: 'AUTH' });
+    }
+  });
+}
+
 const createRoom = (room_id = 'lobby', scope = 'common') => ({
   type: 'room.create', idempotency_key: `create-${room_id}`, expected_revision: 0,
   room_id, label: 'Sala de ejemplo', scope, width: 12, height: 12,
@@ -94,7 +121,7 @@ const updateRoom = (room_id, expected_revision, idempotency_key = 'update-room')
 test('espacios: contexto del backend, sala personal protegida y común editable por ambos', async t => {
   const f = await fixture(t); const app = await f.start();
   const a = await app.login('aurora'); const b = await app.login('marea');
-  assert.equal((await app.request('/api/space')).status, 403);
+  assert.equal((await app.request('/api/space')).status, 401);
   await app.success(a, createRoom('aurora', 'personal'));
   const denied = await app.command(b, updateRoom('aurora', 1));
   assert.equal(denied.status, 403); assert.deepEqual(await denied.json(), { error: 'FORBIDDEN' });
@@ -140,7 +167,7 @@ test('espacios: esquema exacto rechaza extras, suplantación, tipos y cuerpos ex
   assert.equal((await app.view(a)).revision, 1);
 });
 
-test('espacios: revocar durante una sesión rechaza el comando y envía revoke por SSE', async t => {
+test('espacios: política ya revocada exige nueva autenticación y envía revoke por SSE', async t => {
   const f = await fixture(t); const app = await f.start();
   const b = await app.login('marea'); const stream = await app.events(b);
   // Demonstrate this is a live space session before changing its policy.
@@ -148,8 +175,8 @@ test('espacios: revocar durante una sesión rechaza el comando y envía revoke p
   f.policy.members = f.policy.members.filter(m => m.id !== 'marea');
   for (const p of f.policy.projects) p.readers = p.readers.filter(id => id !== 'marea');
   await f.savePolicy();
-  const rejected = await app.command(b, createRoom()); assert.equal(rejected.status, 403);
-  assert.deepEqual(await rejected.json(), { error: 'ACCESS_REVOKED' });
+  const rejected = await app.command(b, createRoom()); assert.equal(rejected.status, 401);
+  assert.deepEqual(await rejected.json(), { error: 'AUTH' });
   await stream.wait('event: revoke'); assert.doesNotMatch(stream.text(), /event: space|keyHash|lobby/);
   const a = await app.login('aurora'); assert.equal((await app.view(a)).revision, 0);
 });
@@ -167,9 +194,16 @@ test('espacios: guardia síncrona revalida tras esperar un body parcial', async 
     req.setTimeout(3000, () => req.destroy(new Error('Partial body timeout'))); req.on('error', reject);
   });
   req.flushHeaders(); await new Promise(resolve => req.write(payload.slice(0, 10), resolve));
+  // A rejected concurrent read proves the first request passed its initial
+  // session guard and is waiting for the body before we change the policy.
+  const concurrent = await app.request('/api/space', { cookie: b });
+  assert.equal(concurrent.status, 429);
+  assert.deepEqual(await concurrent.json(), { error: 'RATE_LIMIT' });
   f.policy.projects[0].readers = ['aurora']; await f.savePolicy();
   req.end(payload.slice(10));
-  assert.equal((await response).status, 403); await stream.wait('event: revoke');
+  const rejected = await response;
+  assert.equal(rejected.status, 403); assert.deepEqual(JSON.parse(rejected.text), { error: 'ACCESS_REVOKED' });
+  await stream.wait('event: revoke'); assert.doesNotMatch(stream.text(), /event: space|lobby/);
   const a = await app.login('aurora'); assert.equal((await app.view(a)).revision, 0);
 });
 
@@ -193,7 +227,7 @@ test('espacios: reiniciar conserva estado y reconoce recibo con sesión nueva', 
   const command = createRoom(); const receipt = (await first.success(a, command)).receipt;
   await first.close();
   const next = await f.start();
-  assert.equal((await next.command(a, command)).status, 403);
+  assert.equal((await next.command(a, command)).status, 401);
   const renewed = await next.login('aurora'); const b = await next.login('marea');
   assert.equal((await next.view(b)).revision, 1);
   const retry = await next.success(renewed, command);

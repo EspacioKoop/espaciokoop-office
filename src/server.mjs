@@ -27,6 +27,17 @@ const security = {
   'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 };
 function json(res, status, value, headers = {}) {
+  const req = res.req;
+  const unreadBody = !req.readableEnded && (Number(req.headers['content-length']) > 0 ||
+    /(?:^|,)\s*chunked\s*(?:,|$)/i.test(req.headers['transfer-encoding'] ?? ''));
+  if (status >= 400 && unreadBody) {
+    // Never drain an attacker-controlled body after rejection. Keep the writable
+    // side alive until the complete error (including 413) has been flushed.
+    const socket = req.socket;
+    req.pause(); socket.pause(); res.shouldKeepAlive = false;
+    headers = { ...headers, Connection: 'close' };
+    res.once('finish', () => socket.destroy());
+  }
   res.writeHead(status, { ...security, 'Content-Type': 'application/json; charset=utf-8', ...headers });
   res.end(JSON.stringify(value));
 }
@@ -104,20 +115,19 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
   }
   const spaceBusy = new Set();
   function spaceGuard(req) {
-    let active;
-    try { active = getSession(req, policy()); }
-    catch { throw new SpaceError('ACCESS_REVOKED'); }
-    const { id, session } = active;
+    // Initial authentication has the same AUTH contract as the core API.
+    const { id, session } = getSession(req, policy());
     const assertAuthorized = () => {
+      let p;
       try {
-        const p = policy(); const current = getSession(req, p);
+        p = policy(); const current = getSession(req, p);
         if (current.id !== id || current.session !== session) throw new Error();
-        if (projectId && !authorizedProjects(p, session.memberId).some(p => p.repo === projectId)) throw new SpaceError('FORBIDDEN');
-      } catch (error) {
+      } catch {
         revoke(id);
-        if (error instanceof SpaceError) throw error;
         throw new SpaceError('ACCESS_REVOKED');
       }
+      // A valid member lacking this project keeps their core session and SSE.
+      if (projectId && !authorizedProjects(p, session.memberId).some(p => p.repo === projectId)) throw new SpaceError('FORBIDDEN');
       return true;
     };
     assertAuthorized();
@@ -179,8 +189,8 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
           const result = await spaces.apply(session.memberId, assertAuthorized, command);
           return json(res, 200, result);
         } catch (error) {
-          if (error instanceof OfficeError && ['CONTENT_TYPE', 'BODY_LIMIT', 'JSON', 'FIELDS'].includes(error.code)) {
-            return json(res, error.status, { error: error.code }, error.code === 'BODY_LIMIT' ? { Connection: 'close' } : {});
+          if (error instanceof OfficeError && ['AUTH', 'POLICY_UNAVAILABLE', 'CONTENT_TYPE', 'BODY_LIMIT', 'JSON', 'FIELDS'].includes(error.code)) {
+            return json(res, error.status, { error: error.code });
           }
           const failure = spaceFailure(error);
           return json(res, failure.status, failure.body);
