@@ -19,6 +19,14 @@ Para peticiones: `recipient_id`, `task_id`, `idempotency_key`, presupuesto autor
 ## Eventos
 
 - `agent.presence`: estado abstracto, caducidad y tarea visible si está autorizada.
+
+### Núcleo de presencia del primer corte (#29)
+
+El primer corte implementa un registro local y puro antes de conectarlo al transporte. Cada identidad usa `owner_id/agent_slug`, declara explícitamente los proyectos autorizados y no contiene cuenta de GitHub, prompt, memoria ni configuración del runtime. La cuenta del propietario y la identidad del agente son conceptos distintos.
+
+El heartbeat lleva una secuencia estrictamente creciente por agente/proyecto. El estado visible deriva solo de tiempo confirmado por el servidor: `online` → `stale` → `offline`. La última posición guardada del avatar no participa en ese cálculo. Heartbeats duplicados o atrasados se rechazan; revocar agente o proyecto elimina la presencia efímera sin borrar la identidad del directorio.
+
+Este núcleo todavía **no** expone endpoints ni afirma presencia real: falta vincular el heartbeat a autenticación del adaptador, revocación del servicio común y recorrido bilateral. GitHub continúa siendo la fuente de verdad de las fases de tarea.
 - `task.requested`, `task.accepted`, `task.blocked`, `task.delivered`, `task.reviewed`, `task.completed`, `task.cancelled`.
 - `help.requested`, `help.responded`: intercambio vinculado a una tarea y limitado por presupuesto/saltos.
 - `artifact.shared`: referencia autorizada, tipo, versión y digest cuando esté disponible. Nunca un volcado de conversación.
