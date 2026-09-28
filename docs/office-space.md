@@ -67,6 +67,12 @@ El servidor debe proporcionar una guardia **síncrona** que lance un error o dev
 false al revocar acceso. Un Promise o un booleano enviado por el cliente no sirve.
 `signal` es opcional y permite invalidar solicitudes con AbortSignal.
 
+Las propiedades de los comandos deben ser datos, no getters. El almacén conserva
+todos los campos al capturar la petición para que el esquema rechace los extras,
+sin descartar símbolos silenciosamente. Los tipos de comando y catálogo exigen
+cadenas. Las excepciones de la guardia se reducen a `ACCESS_REVOKED`; las guardias
+asíncronas siguen devolviendo ese mismo código y sus rechazos se gestionan.
+
 ### Comandos estrictos
 
 Todos requieren `type`, `idempotency_key` y `expected_revision`. Solo se admiten
@@ -132,11 +138,20 @@ cliente nunca aporta una ruta. Directorio 0700, archivos 0600; enlaces simbólic
 permisos inseguros, JSON malformado, estado de otro proyecto y contenido no válido
 se rechazan. No se «recupera» una corrupción borrando el mundo.
 
+El directorio y los archivos deben pertenecer al usuario del proceso. Se rechazan
+archivos con múltiples enlaces duros; la apertura no bloqueante permite comprobar
+y rechazar tipos de archivo especiales. Cada instancia fija la identidad del
+directorio en su primera preparación y la revalida antes del commit. Esto no
+sustituye un sistema de ficheros de confianza ni aísla procesos hostiles del mismo
+usuario. Se mantienen los códigos `UNSAFE_STORE_DIRECTORY` y `CORRUPT_STATE`.
+
 La escritura usa bloqueo exclusivo por proyecto, temporal en el mismo directorio,
 fsync del fichero, rename y fsync del directorio. Todas las escrituras deben usar
-este protocolo. La guardia se comprueba tras las esperas y justo antes de solicitar
-el rename. Una revocación posterior no deshace retroactivamente una transacción
-ya confirmada. Si el acceso se retira antes de responder, no se devuelve la vista.
+este protocolo. La guardia se comprueba tras las esperas y justo antes del rename
+síncrono, sin ceder un turno al bucle de eventos entre ambos. Los fsync siguen siendo
+asíncronos. Una revocación posterior no deshace retroactivamente una transacción
+ya confirmada. El acceso se revalida también después de liberar el bloqueo: si se
+retira durante esa limpieza, no se devuelve la vista, aunque el cambio esté guardado.
 
 Si falla el fsync posterior al rename se informa `COMMIT_UNCERTAIN`, no rollback:
 consultar el estado o reintentar **la misma clave** bajo autorización vigente.
@@ -191,10 +206,19 @@ límite. `COMMIT_UNCERTAIN` exige resolver la ambigüedad mediante la misma clav
 
 ## Evidencia de esta entrega
 
-Verificación ejecutada en Linux / Node 22.16.0: **71 pruebas aprobadas, 0 fallos,
-0 omitidas**. Incluye dos actores, dos instancias concurrentes y un proceso Node
-nuevo que restaura el estado y reconoce un recibo anterior; validación negativa,
-revocación antes del rename y durante lectura, corrupción, symlinks y permisos.
+Verificación de la reconciliación de #16 (unidad 2 de #20), en Linux / Node 22.23.2:
+**123 pruebas aprobadas, 0 fallos, 0 omitidas**. La base integrada pasó sus 71 pruebas.
+Antes de modificar sus fuentes, el conjunto intermedio de 118 pruebas dio 95
+aprobadas y 23 fallos: exactamente los casos nuevos titulados `regresión:`.
+Esos mismos casos pasan con el endurecimiento; las pruebas tituladas `cobertura:`
+amplían garantías existentes y no se presentan como defectos corregidos.
+
+Incluye competencia entre procesos separados, salidas antes/después del rename,
+recuperación tras confirmar su terminación, recibos duraderos y fallos de fsync
+inyectados. Propietarios de archivo y apertura no bloqueante se comprueban mediante
+dobles de E/S, sin cambiar usuarios del sistema. No se simula un apagón físico.
+La API integrada y el campo `shared` de los recibos se conservan; no se incorpora
+la API alternativa `openSpaceStore/execute` ni se cambian los códigos de error.
 
 El ejemplo sintético termina con revisión global 5, una sala, dos muebles y dos
 avatares; detecta `REVISION_CONFLICT` y reconoce el duplicado tras restauración.
