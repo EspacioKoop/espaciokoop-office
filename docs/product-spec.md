@@ -33,11 +33,26 @@ Las dos alternativas comparten un núcleo: identidad de un agente autorizado por
 
 Dos adaptadores completan el ciclo bilateral y la oficina lo representa. La vertical incluye además una lección validada y reutilizada, un premio trazable y reversible, Kanban visitable y asignación operativa con alternativa accesible al arrastre.
 
-### Alternativa B — integración mínima propuesta por Curro y Odiseo
+### Alternativa B — integración mínima, elegida por Eloy
 
 La primera prueba termina al demostrar `requested → accepted → delivered → reviewed` sobre un único repositorio autorizado, con presencia caducable y evidencia real. El estado de tareas se lee inicialmente desde GitHub y la oficina lo representa sin mantener un segundo Kanban. Conocimiento, premios y arrastre operativo pasan a entregas posteriores.
 
-Ninguna alternativa está aprobada como alcance bilateral. Elegir una, combinarlas o definir una tercera requiere confirmación explícita de Varo y Eloy.
+Formulada inicialmente en los análisis de Curro y Odiseo. **Eloy la ha adoptado como posición propia** en su intervención humana del debate ([https://github.com/EspacioKoop/espaciokoop-office/issues/1#issuecomment-5604666362](https://github.com/EspacioKoop/espaciokoop-office/issues/1#issuecomment-5604666362)), por lo que su procedencia ya no es la de un análisis de agente: es un requisito propuesto por un propietario, con el mismo peso que las preferencias de Varo.
+
+#### Estado de la elección
+
+| Propietario | Posición | Evidencia |
+|---|---|---|
+| Eloy | Alternativa B | [Intervención humana en #1](https://github.com/EspacioKoop/espaciokoop-office/issues/1#issuecomment-5604666362) |
+| Varo | Pendiente | — |
+
+**El alcance bilateral sigue sin aprobar.** Una sola mitad no autoriza implementación: mientras Varo no confirme B, la combine con parte de A o formule una tercera, no hay alcance de la primera vertical y no se puede construir ni desplegar.
+
+Lo que sí cambia es que la elección de Eloy ya es evidencia enlazable a efectos de la condición de arranque, y que su argumento acota qué queda por decidir. Razón registrada: **la A no se puede verificar**. Sus cuatro entregables —ciclo, lección validada y reutilizada, premio trazable, Kanban con arrastre— pueden estar «hechos» a la vez sin estar conectados entre sí, y no hay forma de notarlo desde fuera; una lección validaría trabajo que aún no se ha medido y un premio recompensaría una entrega cuyo criterio de aceptación todavía se está escribiendo. Eso no falla de forma visible: se queda enseñando números que nadie ha comprobado. La B tiene la propiedad contraria: **su criterio de aceptación es una cadena, no una lista** — o el ciclo pasa de extremo a extremo, o no pasa, y no hay manera de entregar tres cuartas partes y que parezca terminado.
+
+#### Lo que Eloy traslada de la A a la primera entrega
+
+**La asignación con alternativa accesible al arrastre**, y solo eso. No como concesión de alcance: es el único elemento de la lista A que resulta más caro de añadir después que de hacer desde el principio, porque condiciona cómo se estructura la interfaz entera. Conocimiento, premios e historia se cuelgan de un ciclo que ya funciona; un patrón de interacción, no.
 
 ## Aceptación negativa
 
@@ -50,11 +65,29 @@ La revocación durante una tarea activa es un caso P0: después de retirar el ac
 1. Alojamiento del servicio, acceso privado compartido, autenticación y revocación.
 2. Frontera de proyectos, campos y artefactos autorizados para cada agente.
 3. Alcance de la primera vertical entre las alternativas anteriores.
-4. Fuente de verdad inicial del Kanban y, si procede, dirección de sincronización.
+4. ~~Fuente de verdad inicial del Kanban y, si procede, dirección de sincronización.~~ **Posición de Eloy: GitHub. La oficina representa, no almacena.** Pendiente de confirmación de Varo — ver más abajo.
 5. Momento de incorporar arrastre operativo, conocimiento, premios e historia.
 6. Stack de cliente, servidor y adaptadores, después de fijar el contrato y el modelo de autoridad.
 7. Agentes concretos del lado de Eloy y ficha de onboarding confirmada por él.
 8. Registro de componentes de terceros: fuente, commit, licencia, avisos, modificaciones, uso y estrategia de actualización.
+
+### Orden propuesto por Eloy
+
+Las decisiones **1** (alojamiento, acceso, autenticación y revocación) y **2** (frontera de proyectos y artefactos autorizados) deben cerrarse **antes** que la **6** (stack), y no al revés: el modelo de autoridad condiciona la elección técnica, no a la inversa. Elegir stack primero equivale a decidir el motor antes de saber si el juego es cooperativo.
+
+### Sobre la decisión 4 — fuente de verdad del estado
+
+Regla propuesta por Eloy, importada del simulador, donde la pregunta equivalente («¿sigue siendo jugable si Foundry desaparece?») decide si algo pertenece al núcleo o a la integración:
+
+> **¿Sigue sirviendo la oficina si el Kanban propio desaparece?**
+
+Si la respuesta debe ser sí, la fuente de verdad de tareas es GitHub y la oficina **representa** el estado en vez de almacenarlo. Un segundo Kanban que se sincroniza son, en la práctica, dos Kanbans que se contradicen; y el día que se contradicen ninguno de los dos es fiable.
+
+Esto no cierra la puerta a nada: si más adelante hace falta estado que GitHub no sepa representar, se añade entonces, con el caso concreto delante y no por anticipado.
+
+### Sobre la decisión 8 — registro de componentes de terceros
+
+Eloy la da por acordada tal como está escrita, con un subrayado sobre por qué no es burocracia: una comprobación automática de licencia verifica que el uso esté permitido, **no que la atribución sea cierta**. Un caso real reciente en el repositorio del simulador acreditaba tres paquetes de assets al autor equivocado siendo los archivos libres y la licencia permisiva; lo detectó una persona leyendo el `Readme.txt` incluido en el paquete. Por eso el registro debe recoger **quién lo dice y dónde lo dice**, no solo el identificador de licencia.
 
 ## Condición para autorizar el arranque
 
@@ -68,6 +101,8 @@ La fase de definición solo puede darse por cerrada cuando el [debate #1](https:
 
 El acuerdo se reflejará después en esta especificación y en los documentos técnicos afectados. Una aprobación de PR documental confirma el cambio de texto, pero no sustituye por sí sola la autorización bilateral de implementación.
 
+**Estado de esta condición:** una mitad cubierta. Eloy ha dejado evidencia enlazable de su elección; falta la de Varo. Hasta que exista, la fase de definición **no está cerrada** y no hay autorización de arranque.
+
 ## No objetivos del bootstrap
 
 No hay despliegue, nuevos crons, llamadas a modelos, conexión de agentes, cambios en otros repositorios ni importación de memorias. La documentación no equivale a compatibilidad probada.
@@ -78,3 +113,4 @@ No hay despliegue, nuevos crons, llamadas a modelos, conexión de agentes, cambi
 - [Preferencias vigentes de Varo](product-preferences-varo.md).
 - [Análisis de Curro, agente del entorno de Eloy](https://github.com/EspacioKoop/espaciokoop-office/issues/1#issuecomment-5548366347).
 - [Análisis de Odiseo publicado desde el entorno de Eloy](https://github.com/EspacioKoop/espaciokoop-office/issues/1#issuecomment-5548373550).
+- [Intervención humana de Eloy: elección de alternativa B](https://github.com/EspacioKoop/espaciokoop-office/issues/1#issuecomment-5604666362).

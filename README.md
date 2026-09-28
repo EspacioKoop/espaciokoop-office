@@ -48,21 +48,23 @@ La asociación entre issue y PR se declara en la política local. La proyección
 
 **62/62 pruebas automatizadas**, cero fallos y diez módulos comprobados sin errores de sintaxis. **Ocho recorridos de interfaz** en Chromium con datos sintéticos, incluyendo búsqueda, teclado, actualización del detalle, aislamiento y tamaño móvil. No se observaron errores JavaScript ni peticiones exteriores en esos recorridos.
 
-La navegación HTTP nativa de Chromium estaba bloqueada en el entorno de prueba. La comprobación visual utilizó el servidor Node real mediante un puente de loopback, no una integración nativa de navegador. **Cookies, origen, CSP y SSE nativos del navegador siguen pendientes de validación conjunta**; el servidor sí tiene pruebas HTTP separadas. No se afirma auditoría de seguridad ni CI remoto de este núcleo.
+La navegación HTTP nativa de Chromium estaba bloqueada en el entorno de prueba. La comprobación visual utilizó el servidor Node real mediante un puente de loopback, no una integración nativa de navegador. **Cookies, origen, CSP y SSE nativos del navegador siguen pendientes de validación conjunta**; el servidor sí tiene pruebas HTTP separadas. No se afirma auditoría de seguridad.
+
+**Actualización del 28-09-2026:** la [revisión independiente](https://github.com/EspacioKoop/espaciokoop-office/pull/14#issuecomment-5868508809) repitió las pruebas y recorrió la demo en Chromium **con transporte nativo**: módulos bajo la CSP del servidor, cookie `HttpOnly` invisible desde JavaScript, `POST` del mismo origen, canal SSE de revocación y ciclo completo entre los dos equipos ficticios, sin errores JavaScript. El núcleo tiene CI propia (`Office core tests`, Node 22 y 24). Siguen sin probarse el modo conectado contra GitHub real, el móvil y los lectores de pantalla.
 
 [Informe completo](docs/validation-1.0.md) · [Informe del navegador](assets/screenshots/browser-report.json) · [Blobs exactos comprobados](docs/tested-blobs.json)
 
 ## Integración remota y trabajo paralelo
 
-En [#13](https://github.com/EspacioKoop/espaciokoop-office/issues/13) hay carriles separados para el transporte remoto, conocimiento/progresión y espacios editables. Las PR [#15](https://github.com/EspacioKoop/espaciokoop-office/pull/15) y [#16](https://github.com/EspacioKoop/espaciokoop-office/pull/16) contienen **candidatos alternativos de espacios**, no dos capas para fusionar ciegamente. Sus resultados de pruebas no validan este núcleo ni una integración conjunta.
+En [#13](https://github.com/EspacioKoop/espaciokoop-office/issues/13) hay carriles separados para el transporte remoto, conocimiento/progresión y espacios editables. El módulo de espacios (`packages/office-space`) está integrado en `main` desde [#15](https://github.com/EspacioKoop/espaciokoop-office/pull/15) y [#23](https://github.com/EspacioKoop/espaciokoop-office/pull/23); la alternativa [#16](https://github.com/EspacioKoop/espaciokoop-office/pull/16) se cerró absorbida por #23. Sus pruebas no validan este núcleo ni una integración conjunta.
 
-Esas piezas no están incorporadas en esta rama. La composición debe construir la identidad en el backend autenticado, autorizar cada recurso antes del efecto, ampliar explícitamente los comandos permitidos, persistir antes de confirmar e invalidar vistas tras el commit. Posición de avatar no equivale a presencia; editar mobiliario no asigna trabajo. El servicio común y sus almacenes pertenecen al alojamiento remoto, no a una oficina independiente por cliente.
+Ese módulo llega a esta rama al fusionar `main`, pero **no está compuesto con el núcleo**: la composición y el transporte remoto son [#21](https://github.com/EspacioKoop/espaciokoop-office/issues/21). La composición debe construir la identidad en el backend autenticado, autorizar cada recurso antes del efecto, ampliar explícitamente los comandos permitidos, persistir antes de confirmar e invalidar vistas tras el commit. Posición de avatar no equivale a presencia; editar mobiliario no asigna trabajo. El servicio común y sus almacenes pertenecen al alojamiento remoto, no a una oficina independiente por cliente.
 
 El núcleo actual solo lee tareas: **no implementa todavía los comandos remotos de creación, aceptación, entrega o revisión ni su idempotencia duradera**. No devolver éxito a esos comandos por proyectar una tarea o avanzar fixtures. No activar conocimiento con datos de Eloy fuera de su selección de metadatos.
 
 ## Qué falta para una 1.0 estable
 
-Faltan composición remota real, revisión independiente del SHA, alcance y alojamiento acordados por ambos propietarios, incorporación y prueba de los agentes reales, validación de permisos/API, y un ciclo bilateral real con fallo, revocación y recuperación.
+Faltan composición remota real, revisión del SHA final, alcance y alojamiento acordados por ambos propietarios, incorporación y prueba de los agentes reales, validación de permisos/API, y un ciclo bilateral real con fallo, revocación y recuperación.
 
 También siguen sin integrar en esta aplicación la gestión de agentes, coedición multijugador, avatares controlables, sistemas RPG e inventario, aprendizaje validado, premios, estasis, leyendas y periódico. **No se han eliminado esos objetivos ni dado por entregados mediante una ilustración o una demo.**
 
@@ -70,8 +72,12 @@ La visión anterior se conserva **íntegra y sin modificaciones** en [VISION.md]
 
 ## Documentación y cooperación
 
+[Estado](ESTADO.md) · [Plan #17](https://github.com/EspacioKoop/espaciokoop-office/issues/17) · [Reservas #18](https://github.com/EspacioKoop/espaciokoop-office/issues/18) · [Normas Platino](docs/normas-platino.md) · [Debate #1](https://github.com/EspacioKoop/espaciokoop-office/issues/1)
+
+[Preferencias de Varo](docs/product-preferences-varo.md) · [Arquitectura](docs/architecture.md) · [Interoperabilidad](docs/interoperability.md) · [Preparación de los equipos](docs/onboarding.md) · [Roadmap](docs/roadmap.md) · [Gestión de agentes](docs/agent-management.md) · [Cooperación](docs/cooperation.md)
+
 [Guía de evaluación y política local](RUNNING.md) · [Alcance y puertas de aceptación](docs/acceptance-1.0.md) · [Normas de agentes](AGENTS.md) · [Contribuir](CONTRIBUTING.md) · [Seguridad](SECURITY.md) · [Investigación de referencias](docs/research/README.md)
 
-Trabajo del núcleo en [#14](https://github.com/EspacioKoop/espaciokoop-office/pull/14), con coordinación en #13. Se preservan los documentos de las PR #10/#12 y los archivos de los otros carriles. Sin cambios en infraestructura de los propietarios, concesión de permisos a otro equipo, despliegues ni etiqueta estable.
+Trabajo del núcleo en [#14](https://github.com/EspacioKoop/espaciokoop-office/pull/14); prioridades en #17 y reservas en #18 (historial previo en #13). Se preservan los documentos de las PR #10/#12 y los archivos de los otros carriles. Sin cambios en infraestructura de los propietarios, concesión de permisos a otro equipo, despliegues ni etiqueta estable.
 
 Código y SVG ambiental originales de esta contribución; no se incorpora el ejecutor de Agent Office ni otros runtimes estudiados. La licencia global del proyecto no se decide unilateralmente en este cambio.

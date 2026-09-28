@@ -1,5 +1,17 @@
 # Roadmap
 
+## Fuentes
+
+| Fuente | Ubicación |
+| --- | --- |
+| Prioridad vigente | [Plan maestro #17](https://github.com/EspacioKoop/espaciokoop-office/issues/17) |
+| Reservas | [Registro #18](https://github.com/EspacioKoop/espaciokoop-office/issues/18) |
+| Decisiones de producto | [Debate #1](https://github.com/EspacioKoop/espaciokoop-office/issues/1) |
+| Estado para retomar | [ESTADO.md](../ESTADO.md) |
+| Milestones y releases | No hay; ninguna publicación está autorizada |
+
+Las fases de abajo siguen siendo una propuesta. El orden real lo fija #17 y el alcance de la primera vertical, #1.
+
 ## Entregado en este bootstrap
 
 - Definición del producto, límites, responsabilidades y propuesta de interoperabilidad.
