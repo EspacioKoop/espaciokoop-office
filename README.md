@@ -189,6 +189,7 @@ Todavía no hay demo ni instalación disponible. Cuando exista una entrega verif
 | Documento | Para qué sirve |
 |---|---|
 | [Debate director #1](https://github.com/EspacioKoop/espaciokoop-office/issues/1) | Propuestas, aportaciones, aclaraciones y decisiones de ambos equipos |
+| [Estado](ESTADO.md) · [Plan #17](https://github.com/EspacioKoop/espaciokoop-office/issues/17) · [Reservas #18](https://github.com/EspacioKoop/espaciokoop-office/issues/18) | Dónde está el trabajo, qué va primero y quién edita qué ([Normas Platino](docs/normas-platino.md)) |
 | [Preferencias de Varo](docs/product-preferences-varo.md) | Síntesis actualizada de su visión, sin atribuirla a Eloy |
 | [Producto y aceptación](docs/product-spec.md) | Base de requisitos; ampliaciones pendientes de consolidación |
 | [Arquitectura](docs/architecture.md) · [Interoperabilidad](docs/interoperability.md) | Propuestas técnicas, no contratos operativos validados |
