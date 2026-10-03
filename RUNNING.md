@@ -1,13 +1,14 @@
 # Ejecutar el candidato de EspacioKoop Office
 
-**Versión de trabajo: 1.0.0-rc.1. No es una versión estable aceptada.** La implementación está en la rama `feat/office-1.0-candidate`; no sustituye la visión completa ni las decisiones bilaterales pendientes de #1. [Alcance y aceptación](docs/acceptance-1.0.md).
+**Versión de trabajo: 1.0.0-rc.1. No es una versión estable aceptada.** La implementación evaluable y el servicio común de #25 están integrados en `main`; esto no sustituye la visión completa ni las decisiones bilaterales pendientes de #1. [Alcance y aceptación](docs/acceptance-1.0.md).
 
 ## Evaluación local, sin credenciales
 
 Necesitas Node.js 22.16 o posterior. No hay paquetes de runtime que instalar.
 
 ```sh
-git switch feat/office-1.0-candidate
+git switch main
+git pull --ff-only
 npm start
 ```
 
@@ -82,23 +83,23 @@ Revocar acceso en GitHub se detecta en la siguiente consulta, **no de forma inst
 
 Cerrar sesión retira el contenido mostrado y la cookie. Cerrar el proceso elimina las sesiones y los datos sintéticos. No hay trabajo asíncrono persistente, cron, despliegue, gasto de modelos o archivos de trabajo que recuperar.
 
-## Servicio común: candidato de #21
+## Servicio común integrado (#21 / #25)
 
-Esta rama añade configuración de origen, escucha, TLS opcional y API de espacios,
-sin interfaz nueva. La ejecución local sin variables adicionales se conserva.
-Consulta [la guía de servicio común](docs/remote-collaboration.md) para las
-variables del administrador, HTTPS, túnel privado, persistencia y límites.
-La ronda 3 ha pasado dos controles completos consecutivos: 13 módulos sin
-errores, 114/114 pruebas del núcleo y 123/123 del paquete en cada ejecución.
-`FORBIDDEN` conserva la sesión; la entrada sin sesión válida da 401 `AUTH`;
-la revocación en curso mantiene `ACCESS_REVOKED` y SSE. Los errores con cuerpo
-sin consumir cierran el socket después de entregar la respuesta, incluido 413.
-La PR continúa en borrador: una aprobación de seguridad bloqueó preparar la
-base para demostrar los fallos de las nuevas regresiones contra `5edb9cf`.
-La evidencia, el SHA publicado y CI se enlazan en la guía y en la PR #25.
-No integrar ni desplegar sin cerrar ese control y obtener la autorización.
-No se han probado despliegue, dos redes reales, uso por personas, navegador
-conjunto ni apagón físico.
+`main` incluye configuración de origen, escucha, TLS opcional/túnel privado y
+API tipada de espacios, sin convertir la interfaz en ejecutor. La ejecución
+local sin variables adicionales se conserva. Consulta
+[la guía de servicio común](docs/remote-collaboration.md) para variables del
+administrador, HTTPS, túnel privado, persistencia y límites.
+
+El candidato que se integró pasó check, 114/114 pruebas del núcleo, 123/123 del
+paquete y CI en verde; la evidencia exacta está en #25. `FORBIDDEN` conserva la
+sesión, la entrada sin sesión válida usa 401 `AUTH`, y la revocación en curso
+mantiene `ACCESS_REVOKED` y SSE.
+
+**Integrado no significa desplegado:** siguen pendientes dos redes reales, uso
+por personas, presencia real por agente, navegador conjunto contra el servicio
+privado y recuperación operativa. No expongas `main` a Internet cambiando solo
+el bind; usa exclusivamente el acceso privado y la configuración documentados.
 
 ## Frontera técnica y procedencia
 

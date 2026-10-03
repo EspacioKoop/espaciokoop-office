@@ -2,7 +2,7 @@
 
 **Una oficina colaborativa remota para Varo, Eloy y sus agentes, con GitHub como fuente de tareas.**
 
-El objetivo es compartir oficina **desde redes distintas**, no limitar el producto a una misma casa o LAN. Estado de esta rama: **núcleo e interfaz evaluables localmente, `1.0.0-rc.1`**, todavía sin integrar el servicio remoto. No es una versión estable ni el producto completo aceptado. El servidor de loopback es un entorno de evaluación, no la arquitectura final de la oficina compartida.
+El objetivo es compartir oficina **desde redes distintas**, no limitar el producto a una misma casa o LAN. Estado de `main`: **núcleo, interfaz y servicio común integrados, `1.0.0-rc.1`**, todavía **sin despliegue bilateral ni agentes reales conectados**. No es una versión estable ni el producto completo aceptado. El modo de loopback sigue siendo un entorno de evaluación; la integración remota de #25 no equivale por sí sola a una oficina compartida ya operativa.
 
 <p align="center">
   <img src="assets/screenshots/office-preview.webp" alt="Captura real del candidato Office en Chromium: oficina, equipos de ejemplo, métricas y proyectos seleccionados." width="600" />
@@ -16,7 +16,8 @@ Node.js **22.16 o posterior**. Sin dependencias de runtime que instalar.
 
 ```sh
 git fetch origin
-git switch feat/office-1.0-candidate
+git switch main
+git pull --ff-only
 npm start
 ```
 
@@ -58,13 +59,13 @@ La navegación HTTP nativa de Chromium estaba bloqueada en el entorno de prueba.
 
 En [#13](https://github.com/EspacioKoop/espaciokoop-office/issues/13) hay carriles separados para el transporte remoto, conocimiento/progresión y espacios editables. El módulo de espacios (`packages/office-space`) está integrado en `main` desde [#15](https://github.com/EspacioKoop/espaciokoop-office/pull/15) y [#23](https://github.com/EspacioKoop/espaciokoop-office/pull/23); la alternativa [#16](https://github.com/EspacioKoop/espaciokoop-office/pull/16) se cerró absorbida por #23. Sus pruebas no validan este núcleo ni una integración conjunta.
 
-Ese módulo llega a esta rama al fusionar `main`, pero **no está compuesto con el núcleo**: la composición y el transporte remoto son [#21](https://github.com/EspacioKoop/espaciokoop-office/issues/21). La composición debe construir la identidad en el backend autenticado, autorizar cada recurso antes del efecto, ampliar explícitamente los comandos permitidos, persistir antes de confirmar e invalidar vistas tras el commit. Posición de avatar no equivale a presencia; editar mobiliario no asigna trabajo. El servicio común y sus almacenes pertenecen al alojamiento remoto, no a una oficina independiente por cliente.
+Desde [#25](https://github.com/EspacioKoop/espaciokoop-office/pull/25), `main` **ya compone el núcleo con el servicio común y la API tipada de espacios**: configuración de origen/Host/bind, TLS o túnel privado, contexto autenticado del backend, persistencia e invalidación SSE. La integración conserva la separación entre posición guardada y presencia real; editar mobiliario no asigna trabajo.
 
-El núcleo actual solo lee tareas: **no implementa todavía los comandos remotos de creación, aceptación, entrega o revisión ni su idempotencia duradera**. No devolver éxito a esos comandos por proyectar una tarea o avanzar fixtures. No activar conocimiento con datos de Eloy fuera de su selección de metadatos.
+Lo que **sigue pendiente** es operar ese servicio en un entorno privado acordado, incorporar presencia caducable e identidad por agente y demostrar el recorrido bilateral con agentes reales. El núcleo continúa leyendo el estado de tareas desde GitHub: Office no debe inventar una segunda fuente de verdad ni devolver éxito a creación/aceptación/entrega/revisión solo por proyectar una tarea o avanzar fixtures. No activar conocimiento con datos de Eloy fuera de su selección autorizada.
 
 ## Qué falta para una 1.0 estable
 
-Faltan composición remota real, revisión del SHA final, alcance y alojamiento acordados por ambos propietarios, incorporación y prueba de los agentes reales, validación de permisos/API, y un ciclo bilateral real con fallo, revocación y recuperación.
+Faltan despliegue privado y acceso conjunto del servicio ya integrado, alcance operativo final acordado por ambos propietarios, presencia e identidad real por agente, incorporación y prueba de los agentes reales, validación de permisos/API y un ciclo bilateral real con fallo, revocación y recuperación.
 
 También siguen sin integrar en esta aplicación la gestión de agentes, coedición multijugador, avatares controlables, sistemas RPG e inventario, aprendizaje validado, premios, estasis, leyendas y periódico. **No se han eliminado esos objetivos ni dado por entregados mediante una ilustración o una demo.**
 
