@@ -8,6 +8,7 @@ Biblioteca de referencias para **Varo, Eloy y sus agentes**. Su objetivo es apro
 
 - [Catálogo comparado de repositorios](repository-catalogue.md): candidatos, componentes aprovechables, licencias, límites y prioridad de estudio.
 - [Inventario verificable](repository-catalogue.json): URLs canónicas, revisiones consultadas, fuentes y clasificación, para actualizar y deduplicar el catálogo.
+- [Registro de procedencia de terceros](../third-party-provenance.md): frontera de reutilización, revisiones fijadas, licencias observadas y lista positiva de componentes adoptados.
 - [Debate previo al desarrollo](https://github.com/EspacioKoop/espaciokoop-office/issues/1): peticiones de Varo y aportaciones de ambos lados. El silencio no es aprobación.
 - [Estudio de AI Town y Agent Office](https://github.com/EspacioKoop/espaciokoop-office/issues/1#issuecomment-5548288213).
 - [AgentVerse, Voyager, Project Sid e historia tipo Legends](https://github.com/EspacioKoop/espaciokoop-office/issues/1#issuecomment-5548350510).
