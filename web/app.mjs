@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const labels = { requested: 'Solicitada', accepted: 'Aceptada', delivered: 'Entregada', reviewed: 'Revisada', blocked: 'Bloqueada', unavailable: 'No verificable' };
 const chain = ['requested', 'accepted', 'delivered', 'reviewed'];
 let detailId = null;
-let info; let snapshot = null; let view = 'office'; let events; let refreshTimer; let expiryTimer; let refreshing = false; let epoch = 0;
+let info; let snapshot = null; let teamQueue = null; let view = 'office'; let events; let refreshTimer; let expiryTimer; let refreshing = false; let epoch = 0;
 const node = (tag, text, className) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e; };
 function tell(message = '') { $('notice').textContent = message; }
 function pill(stage) { return node('span', labels[stage] ?? 'No verificable', `pill ${stage}`); }
@@ -15,7 +15,7 @@ async function api(path, data) {
   return result;
 }
 function clearView(message = '') {
-  epoch++; snapshot = null; clearTimeout(refreshTimer); clearTimeout(expiryTimer);
+  epoch++; snapshot = null; teamQueue = null; clearTimeout(refreshTimer); clearTimeout(expiryTimer);
   if (events) { events.close(); events = null; }
   $('office-view').replaceChildren(); $('board').replaceChildren(); $('detail-content').replaceChildren();
   $('detail').close(); $('search').value = ''; $('updated').textContent = 'Sin datos';
@@ -89,9 +89,24 @@ function renderOffice() {
     root.append(demoPanel);
   }
 }
+function queueTask(task) {
+  return { ...task, number: task.issue, pullRequest: task.pull_request };
+}
+function visibleTasks() {
+  return [...(teamQueue?.queue ?? []).map(queueTask), ...snapshot.projects.flatMap(p => p.tasks)];
+}
 function renderBoard() {
   const root = $('board'); root.replaceChildren(); if (!snapshot) return;
   const query = $('search').value.toLocaleLowerCase('es');
+  const queue = node('section', undefined, 'board-project');
+  const teamLabel = snapshot.members.find(member => member.id === snapshot.memberId)?.label ?? 'Equipo autorizado';
+  queue.append(node('h3', `Cola de ${teamLabel}`), node('p', 'Tareas dirigidas a tu equipo. La fase y las evidencias se consultan en GitHub.', 'hint'));
+  const selected = (teamQueue?.queue ?? []).filter(task => (`${task.title} #${task.issue}`).toLocaleLowerCase('es').includes(query));
+  const list = node('div', undefined, 'task-list');
+  for (const task of selected) list.append(taskButton(queueTask(task)));
+  if (!selected.length) list.append(node('p', teamQueue?.queue.length ? 'No hay tareas de tu cola que coincidan con la búsqueda.' : 'Tu equipo no tiene tareas dirigidas a esta cola.', 'empty'));
+  queue.append(list); root.append(queue);
+  root.append(node('h2', 'Proyectos autorizados'));
   for (const project of snapshot.projects) {
     const section = node('section', undefined, 'board-project'); section.append(node('h3', project.label));
     const columns = node('div', undefined, 'columns');
@@ -149,21 +164,29 @@ async function refresh() {
   try {
     const data = await api('/api/snapshot');
     if (started !== epoch || document.hidden) return;
-    snapshot = data;
+    // Secuencial: ambas rutas comparten una única lectura activa por sesión.
+    const queue = await api('/api/queue');
+    if (started !== epoch || document.hidden) return;
+    const expiresAt = Math.min(data.expiresAt, queue.expiresAt);
+    if (data.memberId !== queue.memberId || !Array.isArray(queue.queue) ||
+        !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      throw new Error('La vista ha cambiado o caducado. Vuelve a actualizar.');
+    }
+    snapshot = data; teamQueue = queue;
     $('account-name').textContent = data.members.find(m => m.id === data.memberId)?.label ?? 'Equipo autorizado';
     $('refresh').hidden = false; $('logout').hidden = false;
     $('updated').textContent = `Verificado a las ${new Date(data.generatedAt).toLocaleTimeString('es-ES')}`;
     renderOffice(); renderBoard(); show(view);
     if ($('detail').open) {
-      const current = data.projects.flatMap(p => p.tasks).find(t => t.id === detailId);
+      const current = visibleTasks().find(t => t.id === detailId);
       if (current) detail(current); else $('detail').close();
     }
     tell(data.mode === 'demo' ? 'MODO DE EVALUACIÓN · Datos sintéticos. No hay agentes reales conectados ni llamadas a modelos.' : 'SOLO LECTURA · Selección explícita de metadatos; las operaciones se realizan en GitHub.');
     clearTimeout(expiryTimer); clearTimeout(refreshTimer);
-    expiryTimer = setTimeout(() => clearView('La vista ha caducado sin una comprobación nueva. Datos retirados.'), Math.max(0, data.expiresAt - Date.now()));
+    expiryTimer = setTimeout(() => clearView('La vista ha caducado sin una comprobación nueva. Datos retirados.'), Math.max(0, expiresAt - Date.now()));
     refreshTimer = setTimeout(refresh, 9000);
     if (!events) watchSession();
-  } catch (error) { clearView(error.code === 'AUTH' ? '' : error.message); }
+  } catch (error) { if (started === epoch) clearView(error.code === 'AUTH' ? '' : error.message); }
   finally { refreshing = false; }
 }
 async function login(key) {
