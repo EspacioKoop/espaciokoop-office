@@ -9,6 +9,7 @@ import { OfficeError, insist, digest, validatePolicy, authenticate, authorizedPr
 import { buildTeamQueue, validateTeamRoutes } from './team-queue.mjs';
 import { GitHubSource } from './github.mjs';
 import { DemoSource } from './fixtures.mjs';
+import { createPresenceBridge } from './presence-bridge.mjs';
 import { createSpaceBridge, spaceFailure } from './space-bridge.mjs';
 import { SpaceError, createSpaceState } from '../packages/office-space/src/space.mjs';
 
@@ -78,7 +79,7 @@ export function serviceConfiguration(env = {}) {
   return { bind, publicOrigin, tls: key ? { key: readFileSync(key), cert: readFileSync(cert) } : undefined };
 }
 
-export function createOffice({ mode = 'demo', policyPath, source, policyLoader, taskRoutesLoader, now = Date.now, watchInterval = 750, config = {} } = {}) {
+export function createOffice({ mode = 'demo', policyPath, source, policyLoader, taskRoutesLoader, presenceLoader, now = Date.now, watchInterval = 750, config = {} } = {}) {
   const transport = serviceConfiguration(config);
   insist(['demo', 'live'].includes(mode), 'MODE', 'Modo no válido.');
   const demo = mode === 'demo' ? (source ?? new DemoSource()) : null;
@@ -89,8 +90,14 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
     insist(Buffer.byteLength(text) <= 64000, 'POLICY', 'Política demasiado grande.');
     return JSON.parse(text);
   });
+  let presence = null;
   function policy() {
-    try { return validatePolicy(load()); } catch { throw new OfficeError('POLICY_UNAVAILABLE', 'La política local no está disponible o no es válida. Acceso retirado.', 503); }
+    try {
+      const checked = validatePolicy(load()); presence?.observePolicy(checked); return checked;
+    } catch {
+      presence?.invalidate();
+      throw new OfficeError('POLICY_UNAVAILABLE', 'La política local no está disponible o no es válida. Acceso retirado.', 503);
+    }
   }
   // Fallo cerrado al arrancar; no se sustituye una configuración rota por una demo.
   const initialPolicy = policy();
@@ -105,6 +112,15 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
     catch { throw new OfficeError('QUEUE_UNAVAILABLE', 'Las rutas locales no están disponibles o no son válidas.', 503); }
   }
   taskRoutes(initialPolicy);
+  const loadPresence = presenceLoader ?? (config.OFFICE_AGENT_DIRECTORY === undefined ? null : () => {
+    const text = readFileSync(config.OFFICE_AGENT_DIRECTORY, 'utf8');
+    insist(Buffer.byteLength(text) <= 64000, 'PRESENCE_CONFIG', 'Directorio demasiado grande.');
+    return JSON.parse(text);
+  });
+  presence = loadPresence ? createPresenceBridge({ load: loadPresence,
+    projectId: config.OFFICE_PRESENCE_PROJECT, now }) : null;
+  insist(presence || config.OFFICE_PRESENCE_PROJECT === undefined, 'CONFIG', 'Configura OFFICE_AGENT_DIRECTORY junto al proyecto de presencia.');
+  presence?.initialize(initialPolicy);
   const projectId = config.OFFICE_SPACE_PROJECT ?? (demo ? 'demo/observatorio' : undefined);
   if (projectId !== undefined || config.OFFICE_SPACE_DIR !== undefined) {
     insist(projectId && (demo || config.OFFICE_SPACE_DIR), 'CONFIG', 'Configura OFFICE_SPACE_PROJECT y OFFICE_SPACE_DIR para espacios persistentes.');
@@ -208,7 +224,22 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
           return json(res, failure.status, failure.body);
         } finally { if (activeId) spaceBusy.delete(activeId); }
       }
+      if (req.method === 'POST' && url.pathname === '/api/presence/heartbeat') {
+        insist(presence, 'NOT_FOUND', 'Presencia no configurada.', 404);
+        const key = /^Bearer ([^\s]+)$/.exec(req.headers.authorization ?? '')?.[1];
+        const publication = presence.prepare(key, policy());
+        try {
+          const data = await body(req, ['projectId', 'sequence']);
+          return json(res, 200, publication.commit(data, policy()));
+        } finally { publication.release(); }
+      }
       const p = policy(); const { id, session } = getSession(req, p);
+      if (req.method === 'GET' && url.pathname === '/api/presence') {
+        insist(presence, 'NOT_FOUND', 'Presencia no configurada.', 404);
+        const result = presence.read(session.memberId, p);
+        getSession(req, policy());
+        return json(res, 200, result);
+      }
       if (req.method === 'POST' && url.pathname === '/api/logout') {
         await body(req, []); revoke(id);
         return json(res, 200, { ok: true }, { 'Set-Cookie': `office=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${transport.publicOrigin?.startsWith('https://') ? '; Secure' : ''}`, 'Clear-Site-Data': '"cache", "storage"' });
