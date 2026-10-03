@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { OfficeError, insist, digest, validatePolicy, authenticate, authorizedProjects, publicMember, projectSnapshot } from './domain.mjs';
+import { buildTeamQueue, validateTeamRoutes } from './team-queue.mjs';
 import { GitHubSource } from './github.mjs';
 import { DemoSource } from './fixtures.mjs';
 import { createSpaceBridge, spaceFailure } from './space-bridge.mjs';
@@ -77,7 +78,7 @@ export function serviceConfiguration(env = {}) {
   return { bind, publicOrigin, tls: key ? { key: readFileSync(key), cert: readFileSync(cert) } : undefined };
 }
 
-export function createOffice({ mode = 'demo', policyPath, source, policyLoader, now = Date.now, watchInterval = 750, config = {} } = {}) {
+export function createOffice({ mode = 'demo', policyPath, source, policyLoader, taskRoutesLoader, now = Date.now, watchInterval = 750, config = {} } = {}) {
   const transport = serviceConfiguration(config);
   insist(['demo', 'live'].includes(mode), 'MODE', 'Modo no válido.');
   const demo = mode === 'demo' ? (source ?? new DemoSource()) : null;
@@ -93,6 +94,17 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
   }
   // Fallo cerrado al arrancar; no se sustituye una configuración rota por una demo.
   const initialPolicy = policy();
+  const loadRoutes = taskRoutesLoader ?? (() => {
+    if (config.OFFICE_TASK_ROUTES === undefined) return [];
+    const text = readFileSync(config.OFFICE_TASK_ROUTES, 'utf8');
+    insist(Buffer.byteLength(text) <= 16000, 'TASK_ROUTE', 'Rutas demasiado grandes.');
+    return JSON.parse(text);
+  });
+  function taskRoutes(p) {
+    try { return validateTeamRoutes(loadRoutes(), p); }
+    catch { throw new OfficeError('QUEUE_UNAVAILABLE', 'Las rutas locales no están disponibles o no son válidas.', 503); }
+  }
+  taskRoutes(initialPolicy);
   const projectId = config.OFFICE_SPACE_PROJECT ?? (demo ? 'demo/observatorio' : undefined);
   if (projectId !== undefined || config.OFFICE_SPACE_DIR !== undefined) {
     insist(projectId && (demo || config.OFFICE_SPACE_DIR), 'CONFIG', 'Configura OFFICE_SPACE_PROJECT y OFFICE_SPACE_DIR para espacios persistentes.');
@@ -221,19 +233,33 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
         for (const s of sessions.values()) s.policyHash = hash;
         return json(res, 200, result);
       }
-      if (req.method === 'GET' && url.pathname === '/api/snapshot') {
+      if (req.method === 'GET' && ['/api/snapshot', '/api/queue'].includes(url.pathname)) {
         insist(!busy.has(id) && activeReads < 4, 'RATE_LIMIT', 'Ya hay una lectura en curso. Reintenta después.', 429);
         busy.add(id); activeReads++;
         try {
-          const projects = authorizedProjects(p, session.memberId);
+          const routes = url.pathname === '/api/queue' ? taskRoutes(p) : null;
+          const routeHash = routes && digest(JSON.stringify(routes));
+          const routedProjects = new Set(routes?.filter(r => r.team_id === session.memberId).map(r => r.project_id));
+          const projects = authorizedProjects(p, session.memberId).filter(project => !routes || routedProjects.has(project.repo));
+          const revalidate = () => {
+            const currentPolicy = policy();
+            getSession(req, currentPolicy);
+            if (routes) insist(digest(JSON.stringify(taskRoutes(currentPolicy))) === routeHash,
+              'QUEUE_CHANGED', 'Las rutas han cambiado. Repite la consulta.', 409);
+          };
           const projected = [];
           // Secuencial: evita ráfagas de consultas y mantiene un límite de recursos simple.
           for (const project of projects) {
             const data = await remote.read(project);
-            getSession(req, policy()); // Revocación durante una consulta: descartar antes de continuar.
+            revalidate(); // Revocación durante una consulta: descartar antes de continuar.
             projected.push(projectSnapshot(project, data, p));
           }
-          getSession(req, policy());
+          revalidate();
+          if (routes) return json(res, 200, {
+            mode, version: VERSION, generatedAt: now(), expiresAt: now() + TTL,
+            memberId: session.memberId,
+            queue: buildTeamQueue({ routes, policy: p, teamId: session.memberId, snapshots: projected })
+          });
           const memberIds = new Set(projects.flatMap(pr => pr.readers)); memberIds.add(session.memberId);
           return json(res, 200, {
             mode, version: VERSION, generatedAt: now(), expiresAt: now() + TTL,
