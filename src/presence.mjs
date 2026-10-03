@@ -1,4 +1,4 @@
-import { insist } from './domain.mjs';
+import { insist, validatePolicy } from './domain.mjs';
 
 const agentIdPattern = /^[a-z0-9][a-z0-9-]{0,39}\/[a-z0-9][a-z0-9-]{0,39}$/;
 const repoPattern = /^[a-z0-9][a-z0-9-]{0,38}\/[a-z0-9_.-]{1,100}$/i;
@@ -10,7 +10,8 @@ function exact(value, keys) {
 
 export function validateAgentDirectory(raw, policy) {
   insist(Array.isArray(raw) && raw.length <= 100, 'AGENT_DIRECTORY', 'Directorio de agentes no válido.');
-  const members = new Set(policy?.members?.map(m => m.id) ?? []);
+  policy = validatePolicy(policy);
+  const members = new Set(policy.members.map(m => m.id));
   const projects = new Map((policy?.projects ?? []).map(p => [p.repo, p]));
   const ids = new Set();
   const result = [];
@@ -35,15 +36,18 @@ export function validateAgentDirectory(raw, policy) {
 
 export function createPresenceRegistry({ directory, policy, now = Date.now, onlineFor = 5000, ttl = 15000 } = {}) {
   insist(Number.isSafeInteger(onlineFor) && onlineFor > 0 && Number.isSafeInteger(ttl) && ttl > onlineFor && ttl <= 120000, 'PRESENCE_CONFIG', 'Ventanas de presencia no válidas.');
+  policy = validatePolicy(policy);
   const agents = validateAgentDirectory(directory, policy);
   const byId = new Map(agents.map(agent => [agent.id, agent]));
   const projects = new Map((policy?.projects ?? []).map(project => [project.repo, project]));
   const beats = new Map();
+  const revokedAgents = new Set();
+  const revokedProjects = new Set();
   const key = (agentId, projectId) => `${agentId}\u0000${projectId}`;
 
   function heartbeat({ agentId, projectId, sequence }) {
     const agent = byId.get(agentId);
-    insist(agent && agent.projects.includes(projectId), 'PRESENCE_FORBIDDEN', 'Agente o proyecto no autorizado.', 403);
+    insist(agent && !revokedAgents.has(agentId) && !revokedProjects.has(projectId) && agent.projects.includes(projectId), 'PRESENCE_FORBIDDEN', 'Agente o proyecto no autorizado.', 403);
     insist(Number.isSafeInteger(sequence) && sequence >= 0, 'PRESENCE_SEQUENCE', 'Secuencia de presencia no válida.');
     const id = key(agentId, projectId); const previous = beats.get(id);
     insist(!previous || sequence > previous.sequence, 'PRESENCE_CONFLICT', 'Heartbeat duplicado o fuera de orden.', 409);
@@ -62,7 +66,7 @@ export function createPresenceRegistry({ directory, policy, now = Date.now, onli
 
   function snapshot({ memberId, projectId }) {
     const project = projects.get(projectId);
-    insist(project && project.readers.includes(memberId), 'PRESENCE_FORBIDDEN', 'Proyecto no autorizado.', 403);
+    insist(project && !revokedProjects.has(projectId) && project.readers.includes(memberId), 'PRESENCE_FORBIDDEN', 'Proyecto no autorizado.', 403);
     return agents.filter(agent => agent.projects.includes(projectId)).map(agent => {
       const current = status(agent.id, projectId);
       return { id: agent.id, label: agent.label, ownerId: agent.ownerId, status: current.status, seenAt: current.seenAt };
@@ -71,11 +75,13 @@ export function createPresenceRegistry({ directory, policy, now = Date.now, onli
 
   function revokeAgent(agentId) {
     insist(byId.has(agentId), 'PRESENCE_UNKNOWN', 'Agente no registrado.', 404);
+    revokedAgents.add(agentId);
     for (const projectId of byId.get(agentId).projects) beats.delete(key(agentId, projectId));
   }
 
   function revokeProject(projectId) {
     insist(projects.has(projectId), 'PRESENCE_UNKNOWN', 'Proyecto no registrado.', 404);
+    revokedProjects.add(projectId);
     for (const agent of agents) beats.delete(key(agent.id, projectId));
   }
 

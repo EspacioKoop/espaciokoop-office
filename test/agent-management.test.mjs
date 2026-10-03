@@ -156,3 +156,43 @@ test('gestión: caída tras escribir queda unknown y reconcile evita reintentar'
   assert.equal(reconciled.effective_version, 1);
   assert.equal(adapter.calls(), 1);
 });
+
+test('gestión: duplicados simultáneos solo aplican una vez', async () => {
+  const adapter = fakeAdapter();
+  const gateway = createAgentManagementGateway(adapter);
+  const request = createRequest();
+  const results = await Promise.all([gateway.execute(request), gateway.execute(structuredClone(request))]);
+  assert.equal(adapter.calls(), 1);
+  assert.deepEqual(results[0], results[1]);
+});
+
+test('gestión: escrituras concurrentes respetan la versión y un rechazo no bloquea la cola', async () => {
+  const adapter = fakeAdapter(); adapter.seed(1);
+  const gateway = createAgentManagementGateway(adapter);
+  const write = createRequest({ capability: 'agent.config.write', expected_version: 1 });
+  const results = await Promise.allSettled([
+    gateway.execute(write), gateway.execute({ ...write, operation_id: 'op-2' }),
+  ]);
+  assert.equal(results[0].status, 'fulfilled');
+  assert.equal(results[1].status, 'rejected');
+  assert.equal(results[1].reason.code, 'VERSION_CONFLICT');
+  assert.equal(adapter.calls(), 1);
+  const next = await gateway.execute({ ...write, operation_id: 'op-3', expected_version: 2 });
+  assert.equal(next.status, 'applied');
+  assert.equal(adapter.calls(), 2);
+});
+
+test('gestión: petición queda aislada antes de esperar al adaptador', async () => {
+  const adapter = fakeAdapter();
+  const gateway = createAgentManagementGateway(adapter);
+  const request = createRequest();
+  const pending = gateway.execute(request);
+  request.agent_id = 'equipo-varo:otro';
+  request.operation_id = 'cambiada';
+  request.input.template = 'cambiada';
+  const result = await pending;
+  assert.equal(result.agent_id, 'equipo-eloy:odiseo');
+  assert.equal(result.operation_id, 'op-1');
+  assert.deepEqual(await gateway.execute(createRequest()), result);
+  assert.equal(adapter.calls(), 1);
+});
