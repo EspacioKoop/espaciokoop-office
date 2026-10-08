@@ -109,6 +109,14 @@ export function createAgentManagementGateway(adapter) {
   const manifest = validateManagementManifest(adapter.manifest());
   const supported = new Set(manifest.capabilities);
   const records = new Map();
+  // Un escritor por gateway, incluida la reconciliación: la lectura de versión,
+  // el efecto y su recibo forman una única operación frente a llamadas locales.
+  let pending = Promise.resolve();
+  function serialize(operation) {
+    const result = pending.then(operation);
+    pending = result.catch(() => {});
+    return result;
+  }
 
   async function read(agentId) {
     let raw;
@@ -127,66 +135,69 @@ export function createAgentManagementGateway(adapter) {
     const input = jsonObject(rawRequest.input);
     const normalized = { ...rawRequest, input };
     const requestFingerprint = fingerprint(normalized);
+    rawRequest = normalized;
 
-    const existing = records.get(rawRequest.operation_id);
-    if (existing) {
-      insist(existing.fingerprint === requestFingerprint, 'IDEMPOTENCY_CONFLICT', 'El identificador de operación ya corresponde a otra petición.', 409);
-      return structuredClone(existing.result);
-    }
+    return serialize(async () => {
+      const existing = records.get(rawRequest.operation_id);
+      if (existing) {
+        insist(existing.fingerprint === requestFingerprint, 'IDEMPOTENCY_CONFLICT', 'El identificador de operación ya corresponde a otra petición.', 409);
+        return structuredClone(existing.result);
+      }
 
-    insist(records.size < 1000, 'RATE_LIMIT', 'Demasiadas operaciones de gestión en memoria.', 429);
-    insist(rawRequest.actor_owner_id === manifest.owner_id, 'FORBIDDEN', 'El propietario no autoriza esta operación.', 403);
-    insist(supported.has(rawRequest.capability), 'UNSUPPORTED_CAPABILITY', 'El adaptador no declara esta capacidad.', 409);
+      insist(records.size < 1000, 'RATE_LIMIT', 'Demasiadas operaciones de gestión en memoria.', 429);
+      insist(rawRequest.actor_owner_id === manifest.owner_id, 'FORBIDDEN', 'El propietario no autoriza esta operación.', 403);
+      insist(supported.has(rawRequest.capability), 'UNSUPPORTED_CAPABILITY', 'El adaptador no declara esta capacidad.', 409);
 
-    const before = await read(rawRequest.agent_id);
-    if (creates.has(rawRequest.capability)) {
-      insist(before === null && rawRequest.expected_version === null, 'VERSION_CONFLICT', 'El agente ya existe o la versión esperada no corresponde.', 409);
-    } else {
-      insist(before !== null && rawRequest.expected_version === before.version, 'VERSION_CONFLICT', 'La versión efectiva ha cambiado.', 409);
-    }
+      const before = await read(rawRequest.agent_id);
+      if (creates.has(rawRequest.capability)) {
+        insist(before === null && rawRequest.expected_version === null, 'VERSION_CONFLICT', 'El agente ya existe o la versión esperada no corresponde.', 409);
+      } else {
+        insist(before !== null && rawRequest.expected_version === before.version, 'VERSION_CONFLICT', 'La versión efectiva ha cambiado.', 409);
+      }
 
-    const meta = {
-      operation_id: rawRequest.operation_id,
-      agent_id: rawRequest.agent_id,
-      capability: rawRequest.capability,
-      before_version: before?.version ?? null,
-    };
-
-    let outcome;
-    try {
-      outcome = validateOutcome(await adapter.apply({
+      const meta = {
         operation_id: rawRequest.operation_id,
         agent_id: rawRequest.agent_id,
         capability: rawRequest.capability,
-        expected_version: rawRequest.expected_version,
-        input,
-      }));
-    } catch {
-      const result = resultFor(meta, 'unknown', null, 'ADAPTER_FAILURE');
+        before_version: before?.version ?? null,
+      };
+
+      let outcome;
+      try {
+        outcome = validateOutcome(await adapter.apply({
+          operation_id: rawRequest.operation_id,
+          agent_id: rawRequest.agent_id,
+          capability: rawRequest.capability,
+          expected_version: rawRequest.expected_version,
+          input,
+        }));
+      } catch {
+        const result = resultFor(meta, 'unknown', null, 'ADAPTER_FAILURE');
+        records.set(rawRequest.operation_id, { fingerprint: requestFingerprint, meta, result });
+        return structuredClone(result);
+      }
+
+      let after;
+      try { after = await read(rawRequest.agent_id); }
+      catch {
+        const result = resultFor(meta, 'unknown', null, 'READBACK_UNAVAILABLE');
+        records.set(rawRequest.operation_id, { fingerprint: requestFingerprint, meta, result });
+        return structuredClone(result);
+      }
+
+      let result;
+      if (outcome.outcome === 'rejected') {
+        result = unchangedEvidence(meta, after)
+          ? resultFor(meta, 'rejected', after?.version ?? null, outcome.code)
+          : resultFor(meta, 'unknown', after?.version ?? null, 'READBACK_MISMATCH');
+      } else {
+        result = appliedEvidence(meta, after)
+          ? resultFor(meta, 'applied', after?.version ?? null)
+          : resultFor(meta, 'unknown', after?.version ?? null, 'READBACK_MISMATCH');
+      }
       records.set(rawRequest.operation_id, { fingerprint: requestFingerprint, meta, result });
       return structuredClone(result);
-    }
-
-    let after;
-    try { after = await read(rawRequest.agent_id); }
-    catch {
-      const result = resultFor(meta, 'unknown', null, 'READBACK_UNAVAILABLE');
-      records.set(rawRequest.operation_id, { fingerprint: requestFingerprint, meta, result });
-      return structuredClone(result);
-    }
-
-    let result;
-    if (outcome.outcome === 'rejected') {
-      result = unchangedEvidence(meta, after)
-        ? resultFor(meta, 'rejected', after?.version ?? null, outcome.code)
-        : resultFor(meta, 'unknown', after?.version ?? null, 'READBACK_MISMATCH');
-    } else {
-      result = appliedEvidence(meta, after)
-        ? resultFor(meta, 'applied', after?.version ?? null)
-        : resultFor(meta, 'unknown', after?.version ?? null, 'READBACK_MISMATCH');
-    }
-    records.set(rawRequest.operation_id, { fingerprint: requestFingerprint, meta, result });
-    return structuredClone(result);
+    });
   }
 
   async function reconcile(operationId) {
@@ -210,6 +221,6 @@ export function createAgentManagementGateway(adapter) {
   return {
     manifest: () => structuredClone(manifest),
     execute,
-    reconcile,
+    reconcile: operationId => serialize(() => reconcile(operationId)),
   };
 }

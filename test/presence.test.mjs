@@ -65,6 +65,37 @@ test('revocar agente o proyecto retira presencia sin borrar el directorio', () =
   assert.equal(view.find(a => a.id === 'aurora/atlas').status, 'offline');
   assert.equal(view.find(a => a.id === 'marea/bruma').status, 'online');
   registry.revokeProject('demo/observatorio');
-  view = registry.snapshot({ memberId: 'aurora', projectId: 'demo/observatorio' });
-  assert.ok(view.every(a => a.status === 'offline'));
+  assert.throws(() => registry.snapshot({ memberId: 'aurora', projectId: 'demo/observatorio' }),
+    { code: 'PRESENCE_FORBIDDEN' });
+});
+
+test('revocación de agente impide reconexión sin afectar al otro propietario', () => {
+  const registry = createPresenceRegistry({ directory, policy: demoPolicy });
+  registry.heartbeat({ agentId: 'aurora/atlas', projectId: 'demo/observatorio', sequence: 7 });
+  registry.revokeAgent('aurora/atlas');
+  for (const sequence of [1, 8]) assert.throws(() => registry.heartbeat({
+    agentId: 'aurora/atlas', projectId: 'demo/observatorio', sequence,
+  }), { code: 'PRESENCE_FORBIDDEN' });
+  registry.heartbeat({ agentId: 'marea/bruma', projectId: 'demo/observatorio', sequence: 1 });
+  assert.equal(registry.snapshot({ memberId: 'marea', projectId: 'demo/observatorio' })
+    .find(a => a.id === 'marea/bruma').status, 'online');
+});
+
+test('revocación de proyecto impide lectura y publicación, conserva otros proyectos', () => {
+  const registry = createPresenceRegistry({ directory, policy: demoPolicy });
+  registry.revokeProject('demo/observatorio');
+  assert.throws(() => registry.snapshot({ memberId: 'aurora', projectId: 'demo/observatorio' }),
+    { code: 'PRESENCE_FORBIDDEN' });
+  assert.throws(() => registry.heartbeat({ agentId: 'marea/bruma', projectId: 'demo/observatorio', sequence: 1 }),
+    { code: 'PRESENCE_FORBIDDEN' });
+  registry.heartbeat({ agentId: 'aurora/atlas', projectId: 'demo/archivo', sequence: 1 });
+  assert.equal(registry.snapshot({ memberId: 'aurora', projectId: 'demo/archivo' })[0].status, 'online');
+});
+
+test('política del registry no se amplía al mutar el objeto del llamador', () => {
+  const policy = structuredClone(demoPolicy);
+  const registry = createPresenceRegistry({ directory, policy });
+  policy.projects[1].readers.push('marea');
+  assert.throws(() => registry.snapshot({ memberId: 'marea', projectId: 'demo/archivo' }),
+    { code: 'PRESENCE_FORBIDDEN' });
 });

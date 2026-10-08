@@ -196,7 +196,17 @@ test('espacios: guardia síncrona revalida tras esperar un body parcial', async 
   req.flushHeaders(); await new Promise(resolve => req.write(payload.slice(0, 10), resolve));
   // A rejected concurrent read proves the first request passed its initial
   // session guard and is waiting for the body before we change the policy.
-  const concurrent = await app.request('/api/space', { cookie: b });
+  // El callback write solo confirma envío local; el segundo socket puede
+  // llegar antes al servidor. Esperar la señal observable mantiene la prueba
+  // de la guardia sin depender del orden de recepción entre conexiones.
+  let concurrent;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    concurrent = await app.request('/api/space', { cookie: b });
+    if (concurrent.status === 429) break;
+    assert.equal(concurrent.status, 200);
+    await concurrent.arrayBuffer();
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
   assert.equal(concurrent.status, 429);
   assert.deepEqual(await concurrent.json(), { error: 'RATE_LIMIT' });
   f.policy.projects[0].readers = ['aurora']; await f.savePolicy();
