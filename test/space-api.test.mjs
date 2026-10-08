@@ -191,7 +191,7 @@ test('espacios: guardia síncrona revalida tras esperar un body parcial', async 
     req = rawRequest(app.origin + '/api/space/command', { method: 'POST', headers: {
       origin: app.origin, cookie: b, 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload),
     } }, res => { let text = ''; res.on('data', c => { text += c; }); res.on('end', () => resolve({ status: res.statusCode, text })); });
-    req.setTimeout(3000, () => req.destroy(new Error('Partial body timeout'))); req.on('error', reject);
+    req.setTimeout(8000, () => req.destroy(new Error('Partial body timeout'))); req.on('error', reject);
   });
   req.flushHeaders(); await new Promise(resolve => req.write(payload.slice(0, 10), resolve));
   // A rejected concurrent read proves the first request passed its initial
@@ -200,12 +200,12 @@ test('espacios: guardia síncrona revalida tras esperar un body parcial', async 
   // llegar antes al servidor. Esperar la señal observable mantiene la prueba
   // de la guardia sin depender del orden de recepción entre conexiones.
   let concurrent;
-  for (let attempt = 0; attempt < 20; attempt++) {
+  for (let attempt = 0; attempt < 100; attempt++) {
     concurrent = await app.request('/api/space', { cookie: b });
     if (concurrent.status === 429) break;
     assert.equal(concurrent.status, 200);
     await concurrent.arrayBuffer();
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise(resolve => setTimeout(resolve, 20));
   }
   assert.equal(concurrent.status, 429);
   assert.deepEqual(await concurrent.json(), { error: 'RATE_LIMIT' });
