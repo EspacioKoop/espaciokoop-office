@@ -1,55 +1,35 @@
-# Estado del proyecto
+# Estado actual de EspacioKoop Office
 
-Punto de entrada para retomar el trabajo sin depender de ningún chat. Fuentes canónicas: plan [#17](https://github.com/EspacioKoop/espaciokoop-office/issues/17), registro [#18](https://github.com/EspacioKoop/espaciokoop-office/issues/18) y debate de producto [#1](https://github.com/EspacioKoop/espaciokoop-office/issues/1). Si este archivo contradice a esas fuentes o al estado remoto, prevalecen ellas y se corrige este archivo.
+Corte validado: 9 de octubre de 2026. Referencias canónicas: plan #17,
+reservas #18, decisiones en #1 y código integrado en main.
 
-**Actualizado:** 28-09-2026 · `main` en `72cb9350b7e3df5283b132da0a325e20661be3b4`.
+## Integración acreditada
 
-## Objetivo
-
-Una oficina donde los agentes de Varo y los de Eloy **convivan, compartan información y aprendan unos de otros**. El criterio de «hecho» propuesto está en #17, pendiente de acuerdo.
-
-## Qué hay
-
-| Elemento | Estado | Evidencia |
+| Superficie | PR integrada | Límite |
 |---|---|---|
-| Visión, requisitos, contratos y preparación | Integrados, **pendientes de acuerdo** | `docs/` |
-| `packages/office-space`: salas, muebles y avatares humanos | Integrado y blindado (#23). Aún sin interfaz ni transporte. | 123/123 pruebas |
-| Núcleo e interfaz de la cadena B (solo lectura) | **Integrado** (#14), evaluación local con datos sintéticos | CI [36417854448](https://github.com/EspacioKoop/espaciokoop-office/actions/runs/36417854448) |
-| Servicio común remoto | Candidato en borrador, PR #25, con correcciones de la revisión en curso | #21 |
-| Acceso privado de Eloy (WireGuard) | Guía redactada; **sin configurar** | [Guía](docs/acceso-privado-wireguard.md) · #26 |
-| Oficina 3D viva | Tres bocetos locales, a la espera de que Varo elija estilo | #24 |
-| Agentes reales conectados y prueba bilateral | No existen | — |
-| Aprendizaje, premios, RPG e historia | No implementados | Visión en #1 |
+| Núcleo y visualización de tareas GitHub | #14 | No escribe tareas |
+| Espacios, sesiones y servicio HTTP común | #23 y #25 | Sin prueba entre redes |
+| Gestión, serialización y revocación de agentes | #34 | No ejecuta agentes |
+| Cola HTTP con permisos por equipo | #36 | No crea ni acepta tareas |
+| Vista de cola y evidencias | #38 | Datos sintéticos o proyección |
+| Presencia autenticada, caducable y revocable | #41 | Estar visible no demuestra trabajo |
+| Procedencia documentada de terceros | #30 | Ningún upstream adoptado |
 
-Nada está desplegado ni probado por personas.
+La integración completa de las PR #34, #36, #38 y #41 pasó 179 pruebas
+locales y comprobación de 23 módulos; la PR #41 pasó después CI remoto.
+No trasladar esas cifras sin repetir la prueba sobre una revisión nueva.
 
-## Decisiones
+## Gates abiertos para Office 1.0
 
-Tabla completa en #17 y [decisiones de Varo en #1](https://github.com/EspacioKoop/espaciokoop-office/issues/1#issuecomment-5868570693).
+1. Dos propietarios y dos equipos desde redes distintas, con identidad
+   separada, permisos concretos y revocación efectiva de acceso.
+2. Flujo GitHub de solicitud, aceptación, entrega y revisión con SHA
+   actual y CI válido; la proyección no sustituye operaciones reales.
+3. Prueba de seguridad de sesión, caducidad, aislamiento y caída de red.
+4. Alojamiento y alcance autorizados por ambos propietarios. No publicar
+   el servidor local solo modificando OFFICE_BIND o añadiendo un proxy.
+5. Objetivos de VISION.md: gamificación, conocimiento compartido,
+   avatares, RPG e historia siguen pendientes, no descartados.
 
-**Acordadas por Varo y Eloy:**
-- Primera vertical **B**; el aprendizaje entre equipos va en la entrega siguiente.
-- **GitHub manda en las tareas.** La oficina solo guarda lo de juego: salas, objetos, relaciones e historia.
-- **#11, opción (a):** de Agent Office solo presentación; cada equipo ejecuta con sus agentes.
-
-**Decidida por Varo:** él autoriza los merges, registrándolo en cada PR.
-
-**Pendientes:**
-- **Alojamiento y acceso.** Varo propone un servicio en su lado, con acceso de Eloy por VPN WireGuard limitado y revocable ([guía](docs/acceso-privado-wireguard.md)); falta Eloy.
-- **Criterio de «hecho».** Varo acepta los cinco puntos de #17; falta Eloy.
-- **Agente y tarea** de la primera prueba bilateral, uno por cada lado.
-- **Contenido compartible** para aprender entre equipos. Hoy Eloy autoriza solo metadatos.
-
-## Candidatos abiertos
-
-| PR | Titular | Estado |
-|---|---|---|
-| #25 | Equipo de Varo (Astra Taller) | Servicio común en borrador. Corrigiendo lo señalado en la [revisión](https://github.com/EspacioKoop/espaciokoop-office/pull/25#issuecomment-5869328130). |
-
-Integradas hoy con autorización de Varo: #22, #23, #12 y #14. #16 cerrada por quedar absorbida en #23.
-
-## Punto de retomar
-
-1. Leer #17 y los comentarios de #18, incluida la paginación.
-2. Contrastar con `git log origin/main` y con `gh pr list`.
-3. Continuar por el primer bloque libre del plan que no dependa de una decisión pendiente.
+Las PRs fusionadas no acreditan despliegue, agentes reales conectados ni
+aceptación de producto. Continuar con #17 y #18 sin cerrar las épicas.

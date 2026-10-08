@@ -2,7 +2,10 @@
 
 **Una oficina colaborativa remota para Varo, Eloy y sus agentes, con GitHub como fuente de tareas.**
 
-El objetivo es compartir oficina **desde redes distintas**, no limitar el producto a una misma casa o LAN. Estado de esta rama: **núcleo e interfaz evaluables localmente, `1.0.0-rc.1`**, todavía sin integrar el servicio remoto. No es una versión estable ni el producto completo aceptado. El servidor de loopback es un entorno de evaluación, no la arquitectura final de la oficina compartida.
+El objetivo es compartir oficina **desde redes distintas**. En main ya están
+integrados el servidor HTTP común, la cola por equipo y la presencia
+autenticada de agentes. **No se ha validado el despliegue bilateral real**
+ni aceptado una versión 1.0. Ver [ESTADO.md](ESTADO.md).
 
 <p align="center">
   <img src="assets/screenshots/office-preview.webp" alt="Captura real del candidato Office en Chromium: oficina, equipos de ejemplo, métricas y proyectos seleccionados." width="600" />
@@ -16,7 +19,8 @@ Node.js **22.16 o posterior**. Sin dependencias de runtime que instalar.
 
 ```sh
 git fetch origin
-git switch feat/office-1.0-candidate
+git switch main
+git pull --ff-only
 npm start
 ```
 
@@ -44,6 +48,14 @@ npm test
 
 La asociación entre issue y PR se declara en la política local. La proyección no es un certificador autónomo de entregas y todavía no se ha contrastado con una integración bilateral real.
 
+## Corte integrado del 9 de octubre
+
+Las PR #34 (revocación), #36 (cola), #38 (interfaz), #41 (presencia)
+y #30 (procedencia de terceros) ya están en main. La integración pasó
+179 pruebas locales y 23 módulos comprobados, y #41 pasó CI remoto.
+Es trabajo implementado, **no una prueba bilateral real ni un servicio
+desplegado**. El estado y los próximos gates están en [ESTADO.md](ESTADO.md).
+
 ## Comprobaciones ejecutadas
 
 **62/62 pruebas automatizadas**, cero fallos y diez módulos comprobados sin errores de sintaxis. **Ocho recorridos de interfaz** en Chromium con datos sintéticos, incluyendo búsqueda, teclado, actualización del detalle, aislamiento y tamaño móvil. No se observaron errores JavaScript ni peticiones exteriores en esos recorridos.
@@ -58,7 +70,9 @@ La navegación HTTP nativa de Chromium estaba bloqueada en el entorno de prueba.
 
 En [#13](https://github.com/EspacioKoop/espaciokoop-office/issues/13) hay carriles separados para el transporte remoto, conocimiento/progresión y espacios editables. El módulo de espacios (`packages/office-space`) está integrado en `main` desde [#15](https://github.com/EspacioKoop/espaciokoop-office/pull/15) y [#23](https://github.com/EspacioKoop/espaciokoop-office/pull/23); la alternativa [#16](https://github.com/EspacioKoop/espaciokoop-office/pull/16) se cerró absorbida por #23. Sus pruebas no validan este núcleo ni una integración conjunta.
 
-Ese módulo llega a esta rama al fusionar `main`, pero **no está compuesto con el núcleo**: la composición y el transporte remoto son [#21](https://github.com/EspacioKoop/espaciokoop-office/issues/21). La composición debe construir la identidad en el backend autenticado, autorizar cada recurso antes del efecto, ampliar explícitamente los comandos permitidos, persistir antes de confirmar e invalidar vistas tras el commit. Posición de avatar no equivale a presencia; editar mobiliario no asigna trabajo. El servicio común y sus almacenes pertenecen al alojamiento remoto, no a una oficina independiente por cliente.
+La composición del núcleo y los espacios ya está integrada en main mediante
+#25. La validación remota entre dos propietarios sigue pendiente. Ningún
+avatar visible representa por sí solo actividad de un agente.
 
 El núcleo actual solo lee tareas: **no implementa todavía los comandos remotos de creación, aceptación, entrega o revisión ni su idempotencia duradera**. No devolver éxito a esos comandos por proyectar una tarea o avanzar fixtures. No activar conocimiento con datos de Eloy fuera de su selección de metadatos.
 
