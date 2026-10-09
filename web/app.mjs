@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const labels = { requested: 'Solicitada', accepted: 'Aceptada', delivered: 'Entregada', reviewed: 'Revisada', blocked: 'Bloqueada', unavailable: 'No verificable' };
 const chain = ['requested', 'accepted', 'delivered', 'reviewed'];
 let detailId = null;
-let info; let snapshot = null; let teamQueue = null; let view = 'office'; let events; let refreshTimer; let expiryTimer; let refreshing = false; let epoch = 0;
+let info; let snapshot = null; let teamQueue = null; let presence = null; let view = 'office'; let events; let refreshTimer; let expiryTimer; let refreshing = false; let epoch = 0;
 const node = (tag, text, className) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e; };
 function tell(message = '') { $('notice').textContent = message; }
 function pill(stage) { return node('span', labels[stage] ?? 'No verificable', `pill ${stage}`); }
@@ -15,7 +15,7 @@ async function api(path, data) {
   return result;
 }
 function clearView(message = '') {
-  epoch++; snapshot = null; teamQueue = null; clearTimeout(refreshTimer); clearTimeout(expiryTimer);
+  epoch++; snapshot = null; teamQueue = null; presence = null; clearTimeout(refreshTimer); clearTimeout(expiryTimer);
   if (events) { events.close(); events = null; }
   $('office-view').replaceChildren(); $('board').replaceChildren(); $('detail-content').replaceChildren();
   $('detail').close(); $('search').value = ''; $('updated').textContent = 'Sin datos';
@@ -55,6 +55,18 @@ function renderOffice() {
   });
   teams.append(node('p', snapshot.mode === 'demo' ? 'Equipos ficticios de evaluación. Ningún nombre representa una identidad real.' : 'No se infiere identidad individual, conexión o disponibilidad a partir de una cuenta de GitHub.', 'hint'));
   campus.append(scene, teams); root.append(campus);
+  if (presence) {
+    const presencePanel = node('section', undefined, 'card presence-panel');
+    presencePanel.append(node('span', 'PRESENCIA AUTENTICADA', 'eyebrow'), node('h3', 'Agentes declarados'));
+    const presenceList = node('div', undefined, 'presence-list');
+    for (const agent of presence.agents) {
+      const row = node('div', undefined, `presence-agent ${agent.status}`);
+      row.append(node('strong', agent.label), node('span', { online: 'online', stale: 'stale', offline: 'offline' }[agent.status] ?? 'offline', 'presence-status'));
+      presenceList.append(row);
+    }
+    presencePanel.append(presenceList, node('p', 'Estado efímero servido por /api/presence. No asigna tareas, no emite heartbeats desde el navegador y no expone claves.', 'hint'));
+    root.append(presencePanel);
+  }
   const tasks = snapshot.projects.flatMap(p => p.tasks); const stats = node('section', undefined, 'stats'); stats.setAttribute('aria-label', 'Resumen de tareas visibles');
   const values = [['PROYECTOS', snapshot.projects.length, 'Solo los autorizados'], ['SOLICITUDES', tasks.filter(t => t.stage === 'requested').length, 'Pendientes de aceptación'], ['EN COLABORACIÓN', tasks.filter(t => ['accepted', 'delivered'].includes(t.stage)).length, 'Aceptadas o entregadas'], ['REVISADAS', tasks.filter(t => t.stage === 'reviewed').length, 'SHA aprobado + CI válido']];
   for (const [label, number, hint] of values) { const stat = node('div', undefined, 'card stat'); stat.append(node('span', label), node('strong', number), node('small', hint)); stats.append(stat); }
@@ -167,12 +179,14 @@ async function refresh() {
     // Secuencial: ambas rutas comparten una única lectura activa por sesión.
     const queue = await api('/api/queue');
     if (started !== epoch || document.hidden) return;
-    const expiresAt = Math.min(data.expiresAt, queue.expiresAt);
-    if (data.memberId !== queue.memberId || !Array.isArray(queue.queue) ||
+    const agents = info?.version ? await api('/api/presence') : null;
+    if (started !== epoch || document.hidden) return;
+    const expiresAt = Math.min(data.expiresAt, queue.expiresAt, agents?.expiresAt ?? Infinity);
+    if (data.memberId !== queue.memberId || !Array.isArray(queue.queue) || (agents && (!Array.isArray(agents.agents) || !agents.agents.length)) ||
         !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       throw new Error('La vista ha cambiado o caducado. Vuelve a actualizar.');
     }
-    snapshot = data; teamQueue = queue;
+    snapshot = data; teamQueue = queue; presence = agents;
     $('account-name').textContent = data.members.find(m => m.id === data.memberId)?.label ?? 'Equipo autorizado';
     $('refresh').hidden = false; $('logout').hidden = false;
     $('updated').textContent = `Verificado a las ${new Date(data.generatedAt).toLocaleTimeString('es-ES')}`;
