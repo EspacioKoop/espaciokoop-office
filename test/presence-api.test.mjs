@@ -79,6 +79,31 @@ test('lectura de presencia deniega proyecto no autorizado al equipo', async t =>
   assert.equal((await request('/api/presence', { cookie: await login('marea') })).status, 403);
 });
 
+test('revocación de agente por directorio invalida su clave y deja lectura vacía', async t => {
+  let selected = config();
+  const { request, login, beat } = await start(t, { presenceLoader: () => selected });
+  const cookie = await login('marea');
+  assert.equal((await beat(0)).status, 200);
+  assert.equal((await (await request('/api/presence', { cookie })).json()).agents[1].status, 'online');
+
+  selected = {
+    agents: selected.agents.slice(0, 1),
+    credentials: selected.credentials.slice(0, 1)
+  };
+
+  const denied = await beat(1);
+  assert.equal(denied.status, 401);
+  assert.deepEqual(await denied.json(), { error: 'PRESENCE_AUTH', message: 'Credencial de agente no válida.' });
+
+  const recovered = await request('/api/presence', { cookie });
+  assert.equal(recovered.status, 200);
+  const data = await recovered.json();
+  assert.deepEqual(data.agents.map(agent => [agent.id, agent.status, agent.seenAt]), [
+    ['aurora/worker', 'offline', null]
+  ]);
+  assert.doesNotMatch(JSON.stringify(data), /synthetic-|keyHash|marea\/worker/);
+});
+
 async function partial(origin, key = 'synthetic-marea-agent') {
   let resolveResponse, rejectResponse;
   const response = new Promise((resolve, reject) => { resolveResponse = resolve; rejectResponse = reject; });
