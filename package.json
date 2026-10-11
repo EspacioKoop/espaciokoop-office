@@ -10,11 +10,10 @@
   "scripts": {
     "start": "node src/server.mjs --demo",
     "start:live": "node src/server.mjs --live",
-    "pretest": "npm install --no-save --no-audit --no-fund",
     "test": "node --test test/*.test.mjs test/contracts/*.test.mjs",
     "check": "node tools/check.mjs"
   },
   "devDependencies": {
-    "fast-check": "^3.22.1"
+    "fast-check": "^4.10.2"
   }
 }

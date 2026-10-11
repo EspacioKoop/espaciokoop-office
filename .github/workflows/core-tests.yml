@@ -38,6 +38,8 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci
       - name: Module check (syntax, whitespace, no process execution in src/)
         run: npm run check
       - name: Tests
