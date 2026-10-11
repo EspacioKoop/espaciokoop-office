@@ -146,6 +146,45 @@ test('resiliencia: error en spaceCore no rompe serverCore ni lanza excepciones n
   assert.equal(serverRes.body.status, 'healthy');
 });
 
+test('seguridad: la ruta comprueba identidad y proyecto con la politica del host', async () => {
+  const policy = mockPolicy();
+  const directory = mockDirectory();
+  let reads = 0;
+
+  const requestFor = async (agentId, projectId) => handleSpaceRequest(
+    { path: '/api/space', method: 'GET' },
+    {
+      agentId,
+      projectId,
+      // Este callback representa el guard creado por el backend autenticado;
+      // queda ligado al principal y proyecto y vuelve a consultar la política.
+      assertAuthorized() {
+        const access = authorizeSpaceAccess(agentId, projectId, 'read', { directory, policy });
+        if (!access.authorized) throw new SpaceError('FORBIDDEN');
+        return true;
+      }
+    },
+    {
+      async read(_identity, assertAuthorized, context) {
+        assertAuthorized();
+        reads++;
+        return { projectId: context.projectId };
+      }
+    }
+  );
+
+  const allowed = await requestFor('alfa/agent-1', 'org/repo-a');
+  assert.equal(allowed.status, 200);
+  assert.deepEqual(allowed.body, { projectId: 'org/repo-a' });
+  assert.equal(reads, 1);
+
+  const wrongProject = await requestFor('alfa/agent-1', 'org/repo-b');
+  assert.equal(wrongProject.status, 403);
+  const unknownAgent = await requestFor('unknown/agent-x', 'org/repo-a');
+  assert.equal(unknownAgent.status, 403);
+  assert.equal(reads, 1, 'denegaciones deben ocurrir antes de leer el espacio');
+});
+
 test('autorizacion: concede o deniega segun directorio, politica y presencia', () => {
   const policy = mockPolicy();
   const directory = mockDirectory();

@@ -5,6 +5,12 @@ const agentIdPattern = /^[a-z0-9][a-z0-9._:/-]{0,79}$/i;
 const validStatuses = new Set(['ok', 'degraded', 'down']);
 const validActions = new Set(['read', 'edit', 'move', 'manage', 'space.read', 'space.edit', 'space.move', 'space.edit_common']);
 
+/**
+ * Valida solo la forma del contexto. `ctx` es interno y debe proceder del host
+ * autenticado; nunca se debe copiar aquí un cuerpo HTTP del cliente. El host
+ * construye `assertAuthorized` ligado a la sesión, identidad, proyecto y acción,
+ * y lo revalida durante la operación para que la revocación surta efecto.
+ */
 export function validateIntegrationContext(ctx) {
   insist(ctx && typeof ctx === 'object' && !Array.isArray(ctx), 'INTEGRATION_CONTRACT', 'El contexto de integración debe ser un objeto.');
   insist(typeof ctx.projectId === 'string' && repoPattern.test(ctx.projectId), 'INTEGRATION_CONTRACT', 'Identificador de proyecto no válido.');
