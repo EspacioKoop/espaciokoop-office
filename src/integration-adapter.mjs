@@ -7,7 +7,7 @@ import {
   validateSpaceEvent,
   validateAuthorizationParams
 } from './integration-contracts.mjs';
-import { validateAgentDirectory, createPresenceRegistry } from './presence.mjs';
+import { validateAgentDirectory } from './presence.mjs';
 
 const statusSeverity = { ok: 0, degraded: 1, down: 2 };
 
@@ -33,28 +33,55 @@ export async function handleSpaceRequest(req, ctx, spaceCoreInstance = null) {
   const validatedCtx = validateIntegrationContext(ctx);
   const spaceCore = spaceCoreInstance ?? ctx?.spaceCore;
 
+  // Only the trusted HTTP/session layer may supply this synchronous guard.
+  // The real space bridge calls it repeatedly across asynchronous I/O so
+  // revocation between reads/writes cannot be bypassed by a stale snapshot.
+  const assertAuthorized = ctx?.assertAuthorized;
+  if (typeof assertAuthorized !== 'function' ||
+      !(validatedCtx.memberId || validatedCtx.agentId)) {
+    return { status: 403, body: { error: 'ACCESS_REVOKED' } };
+  }
+
   if (!spaceCore) {
     return { status: 503, body: { error: 'SPACE_UNAVAILABLE' } };
   }
 
+  // A guard that fails, becomes async, or returns an invalid result revokes
+  // access. Re-run it inside the underlying storage operation as well.
+  const requireAuthorized = () => {
+    let checked;
+    try { checked = assertAuthorized(); }
+    catch { throw new SpaceError('ACCESS_REVOKED'); }
+    if (checked !== undefined && checked !== true) {
+      if (checked && typeof checked.then === 'function') Promise.resolve(checked).catch(() => {});
+      throw new SpaceError('ACCESS_REVOKED');
+    }
+    return checked;
+  };
+
   try {
+    requireAuthorized();
     if (validatedReq.path === '/api/space' && validatedReq.method === 'GET') {
       const data = typeof spaceCore.read === 'function'
-        ? await spaceCore.read(validatedCtx.memberId ?? validatedCtx.agentId, () => true, validatedCtx)
+        ? await spaceCore.read(validatedCtx.memberId ?? validatedCtx.agentId, requireAuthorized, validatedCtx)
         : await spaceCore.handleRequest(validatedReq, validatedCtx);
+      requireAuthorized();
       return { status: 200, body: data };
     }
 
     if (validatedReq.path === '/api/space/command' && validatedReq.method === 'POST') {
       const command = validatedReq.body;
       const data = typeof spaceCore.apply === 'function'
-        ? await spaceCore.apply(validatedCtx.memberId ?? validatedCtx.agentId, () => true, command, validatedCtx)
+        ? await spaceCore.apply(validatedCtx.memberId ?? validatedCtx.agentId, requireAuthorized, command, validatedCtx)
         : await spaceCore.handleRequest(validatedReq, validatedCtx);
+      requireAuthorized();
       return { status: 200, body: data };
     }
 
     if (typeof spaceCore.handleRequest === 'function') {
       const data = await spaceCore.handleRequest(validatedReq, validatedCtx);
+      // The fallback handler can be async; check revocation on completion.
+      requireAuthorized();
       return { status: 200, body: data };
     }
 
@@ -164,6 +191,14 @@ export function authorizeSpaceAccess(agentIdOrArgs, projectIdArg, actionArg, opt
     }
   }
 
+  // Directory + policy can establish read membership; mutations require a
+  // separate capability-aware authorizer from the authenticated host.
+  if (!(options.directory && options.policy)) {
+    return { authorized: false, agentId, projectId, action, reason: 'POLICY_UNAVAILABLE' };
+  }
+  if (!['read', 'space.read'].includes(action)) {
+    return { authorized: false, agentId, projectId, action, reason: 'CAPABILITY_UNVERIFIED' };
+  }
   return { authorized: true, agentId, projectId, action };
 }
 

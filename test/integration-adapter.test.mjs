@@ -91,7 +91,7 @@ test('routing: composeServerWithSpace enruta /api/space* a spaceCore y el resto 
 
   const spaceRes = await composed.handleRequest(
     { method: 'GET', path: '/api/space' },
-    { projectId: 'org/repo-a', memberId: 'alfa' }
+    { projectId: 'org/repo-a', memberId: 'alfa', assertAuthorized: () => true }
   );
   assert.equal(spaceCalled, true);
   assert.equal(spaceRes.status, 200);
@@ -126,14 +126,14 @@ test('resiliencia: error en spaceCore no rompe serverCore ni lanza excepciones n
 
   const readRes = await composed.handleRequest(
     { method: 'GET', path: '/api/space' },
-    { projectId: 'org/repo-a', memberId: 'alfa' }
+    { projectId: 'org/repo-a', memberId: 'alfa', assertAuthorized: () => true }
   );
   assert.equal(readRes.status, 409);
   assert.equal(readRes.body.error, 'REVISION_CONFLICT');
 
   const applyRes = await composed.handleRequest(
     { method: 'POST', path: '/api/space/command', body: { type: 'avatar.move' } },
-    { projectId: 'org/repo-a', memberId: 'alfa' }
+    { projectId: 'org/repo-a', memberId: 'alfa', assertAuthorized: () => true }
   );
   assert.equal(applyRes.status, 503);
   assert.equal(applyRes.body.error, 'SPACE_UNAVAILABLE');
@@ -223,4 +223,72 @@ test('health: mergeHealthChecks combina salud de server Core y spaceCore de form
 
   assert.equal(healthCombined.status, 'ok');
   assert.equal(healthCombined.timestamp, 600);
+});
+
+
+test('seguridad: sin guard o sin politica deniega por defecto', async () => {
+  assert.deepEqual(
+    authorizeSpaceAccess('alfa/agent-1', 'org/repo-a', 'read'),
+    { authorized: false, agentId: 'alfa/agent-1', projectId: 'org/repo-a', action: 'read', reason: 'POLICY_UNAVAILABLE' }
+  );
+  const read = async (_member, guard) => ({ authorized: guard() });
+  const denied = await handleSpaceRequest(
+    { path: '/api/space', method: 'GET' },
+    { projectId: 'org/repo-a', memberId: 'alfa' },
+    { read }
+  );
+  assert.equal(denied.status, 403);
+  assert.equal(denied.body.error, 'ACCESS_REVOKED');
+});
+
+test('seguridad: el bridge recibe guard autenticado y rechaza revocacion', async () => {
+  let calls = 0;
+  let revocado = false;
+  const read = async (_member, guard) => {
+    calls++;
+    revocado = true;
+    guard();
+    return { data: 'nunca' };
+  };
+  const result = await handleSpaceRequest(
+    { path: '/api/space', method: 'GET' },
+    { projectId: 'org/repo-a', memberId: 'alfa', assertAuthorized: () => {
+      if (revocado) throw new Error('session revoked');
+      return true;
+    } },
+    { read }
+  );
+  assert.equal(calls, 1);
+  assert.equal(result.status, 403);
+  assert.equal(result.body.error, 'ACCESS_REVOKED');
+});
+
+test('seguridad: no basta pertenecer al proyecto para administrar recursos', () => {
+  const result = authorizeSpaceAccess('alfa/agent-1', 'org/repo-a', 'manage', {
+    policy: mockPolicy(), directory: mockDirectory()
+  });
+  assert.equal(result.authorized, false);
+  assert.equal(result.reason, 'CAPABILITY_UNVERIFIED');
+});
+
+test('seguridad: guard asíncrono es denegado y no accede a espacio', async () => {
+  let invoked = false;
+  const result = await handleSpaceRequest(
+    { path: '/api/space', method: 'GET' },
+    { projectId: 'org/repo-a', memberId: 'alfa', assertAuthorized: async () => true },
+    { async read() { invoked = true; return { data: 'hidden' }; } }
+  );
+  assert.equal(result.status, 403);
+  assert.equal(invoked, false);
+});
+
+test('seguridad: revocación durante fallback no publica datos', async () => {
+  let active = true;
+  const result = await handleSpaceRequest(
+    { path: '/api/space', method: 'GET' },
+    { projectId: 'org/repo-a', memberId: 'alfa', assertAuthorized: () => active },
+    { async handleRequest() { active = false; return { secret: 'hidden' }; } }
+  );
+  assert.equal(result.status, 403);
+  assert.equal(result.body.error, 'ACCESS_REVOKED');
 });
