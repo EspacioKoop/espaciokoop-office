@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node src/server.mjs --demo",
     "start:live": "node src/server.mjs --live",
+    "pretest": "npm install --no-save --no-audit --no-fund",
     "test": "node --test test/*.test.mjs test/contracts/*.test.mjs",
     "check": "node tools/check.mjs"
   },
