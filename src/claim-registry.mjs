@@ -48,7 +48,7 @@ function fileList(value, { required }) {
     // Paths are repository-relative POSIX names; no filesystem operations occur here.
     const segments = entry.split('/');
     insist(entry === entry.trim() && !entry.includes('\\\\') &&
-      !/[\\x00-\\x1f\\x7f]/.test(entry) &&
+      !/[\x00-\x1f\x7f]/.test(entry) &&
       segments.every(part => part.length > 0 && part !== '.' && part !== '..'),
       'CLAIM_EVENT', 'Ruta no canónica en CLAIM.');
     return entry;
