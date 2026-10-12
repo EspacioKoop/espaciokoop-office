@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const labels = { requested: 'Solicitada', accepted: 'Aceptada', delivered: 'Entregada', reviewed: 'Revisada', blocked: 'Bloqueada', unavailable: 'No verificable' };
 const chain = ['requested', 'accepted', 'delivered', 'reviewed'];
 let detailId = null;
-let info; let snapshot = null; let teamQueue = null; let view = 'office'; let events; let refreshTimer; let expiryTimer; let refreshing = false; let epoch = 0;
+let info; let snapshot = null; let teamQueue = null; let sceneState = null; let view = 'office'; let events; let refreshTimer; let expiryTimer; let refreshing = false; let epoch = 0;
 const node = (tag, text, className) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e; };
 function tell(message = '') { $('notice').textContent = message; }
 function pill(stage) { return node('span', labels[stage] ?? 'No verificable', `pill ${stage}`); }
@@ -15,12 +15,60 @@ async function api(path, data) {
   return result;
 }
 function clearView(message = '') {
-  epoch++; snapshot = null; teamQueue = null; clearTimeout(refreshTimer); clearTimeout(expiryTimer);
+  epoch++; snapshot = null; teamQueue = null; sceneState = null; clearTimeout(refreshTimer); clearTimeout(expiryTimer);
   if (events) { events.close(); events = null; }
   $('office-view').replaceChildren(); $('board').replaceChildren(); $('detail-content').replaceChildren();
   $('detail').close(); $('search').value = ''; $('updated').textContent = 'Sin datos';
   $('account-name').textContent = 'Sin sesión'; $('refresh').hidden = true; $('logout').hidden = true;
   show(view); tell(message);
+}
+async function loadSceneState() {
+  try {
+    const data = await api('/api/presence');
+    const agents = Array.isArray(data.agents) ? data.agents.filter(agent => agent && typeof agent.id === 'string') : [];
+    return { available: true, agents, generatedAt: data.generatedAt, expiresAt: data.expiresAt };
+  } catch (error) {
+    if (['NOT_FOUND', 'PRESENCE_UNAVAILABLE'].includes(error.code)) {
+      return { available: false, agents: [], reason: error.code };
+    }
+    throw error;
+  }
+}
+function sceneTasks() {
+  const tasks = visibleTasks();
+  return {
+    requested: tasks.filter(task => task.stage === 'requested'),
+    accepted: tasks.filter(task => task.stage === 'accepted'),
+    delivered: tasks.filter(task => task.stage === 'delivered'),
+    reviewed: tasks.filter(task => task.stage === 'reviewed')
+  };
+}
+function renderLifeScene() {
+  const groups = sceneTasks();
+  const scene = node('section', undefined, 'life-scene');
+  scene.setAttribute('aria-label', 'Vista 3D mínima basada en presencia y reservas verificadas');
+  const floor = node('div', undefined, 'life-floor');
+  const rooms = [
+    ['requested', 'Recepción', 'Solicitudes sin reserva'], ['accepted', 'Mesa de trabajo', 'Reservas aceptadas'],
+    ['delivered', 'Entrega', 'PR entregadas'], ['reviewed', 'Revisión', 'SHA revisado']
+  ];
+  for (const [stage, title, hint] of rooms) {
+    const room = node('div', undefined, `life-room ${stage}`);
+    room.append(node('strong', title), node('span', `${groups[stage].length} · ${hint}`));
+    if (groups[stage][0]) room.append(node('small', `#${groups[stage][0].number ?? groups[stage][0].issue} ${groups[stage][0].title}`));
+    floor.append(room);
+  }
+  const agents = node('div', undefined, 'life-agents');
+  const visibleAgents = sceneState?.agents ?? [];
+  for (const agent of visibleAgents) {
+    const marker = node('button', undefined, `life-agent ${agent.status ?? 'offline'}`);
+    marker.type = 'button';
+    marker.append(node('span', (agent.label ?? agent.id).slice(0, 1), 'life-avatar'), node('span', `${agent.label ?? agent.id} · ${agent.status ?? 'offline'}`));
+    agents.append(marker);
+  }
+  if (!visibleAgents.length) agents.append(node('p', sceneState?.available ? 'Sin presencia publicada para este proyecto.' : 'Presencia real no configurada: no se dibujan agentes.', 'empty'));
+  scene.append(floor, agents, node('p', 'Las salas se llenan con tareas verificadas. Los personajes solo aparecen si /api/presence devuelve agentes autorizados; la vista vacía no simula colaboración.', 'scene-caption'));
+  return scene;
 }
 function show(next) {
   view = next;
@@ -44,13 +92,13 @@ function renderOffice() {
   intro.append(node('span', 'EL LUGAR DONDE LAS IDEAS SE ENCUENTRAN', 'eyebrow'), node('h2', 'Tu campus, con contexto.'), node('p', 'Proyectos compartidos. Responsabilidades claras. Evidencias a un clic.'));
   heading.append(intro); root.append(heading);
   const campus = node('div', undefined, 'campus'); const scene = node('section', undefined, 'scene-card');
-  const sceneMeta = node('div', undefined, 'scene-meta'); sceneMeta.append(node('h3', 'El espacio común'), node('span', 'Vista ambiental · sin telemetría'));
-  const image = node('img'); image.src = '/office.svg'; image.alt = 'Ilustración original de la oficina: talleres, mesa compartida, biblioteca y plantas. No muestra agentes reales.';
-  scene.append(sceneMeta, image, node('div', 'La escena es una representación ambiental. La actividad real se consulta en los proyectos, no se deduce de los personajes.', 'scene-caption'));
+  const sceneMeta = node('div', undefined, 'scene-meta'); sceneMeta.append(node('h3', 'El espacio común'), node('span', 'Vista 3D mínima · sin telemetría'));
+  scene.append(sceneMeta, renderLifeScene());
   const teams = node('section', undefined, 'card team-panel'); teams.append(node('h3', 'Equipos incorporados'));
   snapshot.members.forEach((member, index) => {
     const card = node('div', undefined, 'team-card'); const avatar = node('div', member.label.split(' ').at(-1).slice(0, 1), `avatar ${index % 2 ? 'alt' : ''}`); avatar.setAttribute('aria-hidden', 'true');
-    const text = node('div'); text.append(node('strong', member.label), node('small', member.githubLogin), node('small', 'Cuenta compartida'), node('small', 'Presencia no disponible'));
+    const agent = sceneState?.agents?.find(item => item.ownerId === member.id || item.teamId === member.id || item.id?.startsWith(`${member.id}/`));
+    const text = node('div'); text.append(node('strong', member.label), node('small', member.githubLogin), node('small', 'Cuenta compartida'), node('small', agent ? `Presencia ${agent.status}` : 'Sin presencia real publicada'));
     card.append(avatar, text); teams.append(card);
   });
   teams.append(node('p', snapshot.mode === 'demo' ? 'Equipos ficticios de evaluación. Ningún nombre representa una identidad real.' : 'No se infiere identidad individual, conexión o disponibilidad a partir de una cuenta de GitHub.', 'hint'));
@@ -168,12 +216,14 @@ async function refresh() {
     // Secuencial: ambas rutas comparten una única lectura activa por sesión.
     const queue = await api('/api/queue');
     if (started !== epoch || document.hidden) return;
-    const expiresAt = Math.min(data.expiresAt, queue.expiresAt);
+    const scene = await loadSceneState();
+    if (started !== epoch || document.hidden) return;
+    const expiresAt = Math.min(data.expiresAt, queue.expiresAt, Number.isFinite(scene.expiresAt) ? scene.expiresAt : Infinity);
     if (data.memberId !== queue.memberId || !Array.isArray(queue.queue) ||
         !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       throw new Error('La vista ha cambiado o caducado. Vuelve a actualizar.');
     }
-    snapshot = data; teamQueue = queue;
+    snapshot = data; teamQueue = queue; sceneState = scene;
     $('account-name').textContent = data.members.find(m => m.id === data.memberId)?.label ?? 'Equipo autorizado';
     $('refresh').hidden = false; $('logout').hidden = false;
     $('updated').textContent = `Verificado a las ${new Date(data.generatedAt).toLocaleTimeString('es-ES')}`;

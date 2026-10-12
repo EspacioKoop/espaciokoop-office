@@ -59,7 +59,7 @@ function deferred() { let release; const promise = new Promise(resolve => { rele
 
 test('UI: cola del equipo, búsqueda, texto literal y detalle de evidencia accesible', async () => {
   const ui = await client(); ui.normal(); await ui.refresh();
-  assert.deepEqual(ui.calls.map(call => call.path), ['/api/snapshot', '/api/queue']);
+  assert.deepEqual(ui.calls.map(call => call.path), ['/api/snapshot', '/api/queue', '/api/presence']);
   assert.ok(ui.calls.every(call => call.options.cache === 'no-store' && call.options.credentials === 'same-origin'));
   assert.match(ui.get('board').textContent, /Cola de Equipo Marea.*Cola <b>literal<\/b>.*Entregada/);
   const button = all(ui.get('board')).find(element => element.tagName === 'button');
