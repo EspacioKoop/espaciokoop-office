@@ -1,7 +1,5 @@
 # EspacioKoop Office
 
-> **¿Vienes a entrar en la Office compartida? Eloy y sus agentes: [leed primero esta guía](docs/office-first-connection.md).** Explica VPN, acceso individual, conexión real de agentes y diagnóstico. Las claves y la URL operativa se entregan por privado. `npm start` es evaluación local, no conexión a la Office común.
-
 **Una oficina colaborativa remota para Varo, Eloy y sus agentes, con GitHub como fuente de tareas.**
 
 El objetivo es compartir oficina **desde redes distintas**. En main ya están
