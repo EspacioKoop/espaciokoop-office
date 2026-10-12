@@ -124,7 +124,7 @@ export function createOfficeCalendar({ policy, now = Date.now, maxRecurrenceCoun
 
   const events = new Map(); // eventId -> event
   const idempotencyRecords = new Map(); // `${ownerId}:${idempotencyKey}` -> { eventId, fingerprint }
-  const voluntaryPresences = new Map(); // `${eventId}:${avatarId}` -> presence
+  const voluntaryPresences = new Map(); // `${roomId}:${ownerId}:${avatarId}:${eventId || global}` -> presence
   const revokedOwners = new Set();
   const revokedRooms = new Set();
 
@@ -321,9 +321,24 @@ export function createOfficeCalendar({ policy, now = Date.now, maxRecurrenceCoun
     const currentTime = now();
     insist(event.status === 'scheduled', 'EVENT_EXPIRED', 'El evento ya está cancelado o procesado.', 409);
 
+    const safeReason = clean(reason, 200);
     event.status = 'cancelled';
-    event.cancelReason = clean(reason, 200);
+    event.cancelReason = safeReason;
     event.updatedAt = currentTime;
+
+    // A cancelled primary event cancels the entire series. Cancelling an
+    // individual child occurrence does not affect its siblings.
+    if (event.parentEventId === null) {
+      for (const child of events.values()) {
+        if (child.parentEventId === event.eventId &&
+            child.ownerId === ownerId && child.roomId === event.roomId &&
+            child.status === 'scheduled') {
+          child.status = 'cancelled';
+          child.cancelReason = safeReason;
+          child.updatedAt = currentTime;
+        }
+      }
+    }
 
     return getEvent(eventId);
   }
@@ -342,7 +357,7 @@ export function createOfficeCalendar({ policy, now = Date.now, maxRecurrenceCoun
       insist(event && event.roomId === roomId && event.status === 'scheduled', 'EVENT_NOT_FOUND', 'Evento no válido para presencia.', 404);
     }
 
-    const key = `${roomId}:${avatarId}:${eventId || 'global'}`;
+    const key = `${roomId}:${ownerId}:${avatarId}:${eventId || 'global'}`;
     const presenceRecord = {
       avatarId,
       avatarLabel: cleanLabel,
@@ -361,7 +376,7 @@ export function createOfficeCalendar({ policy, now = Date.now, maxRecurrenceCoun
   function cancelVoluntaryPresence({ avatarId, ownerId, roomId, eventId = null }) {
     checkMember(ownerId);
     checkRoom(roomId);
-    const key = `${roomId}:${avatarId}:${eventId || 'global'}`;
+    const key = `${roomId}:${ownerId}:${avatarId}:${eventId || 'global'}`;
     const presence = voluntaryPresences.get(key);
     insist(presence, 'EVENT_NOT_FOUND', 'Registro de presencia voluntaria no encontrado.', 404);
     insist(presence.ownerId === ownerId, 'EVENT_FORBIDDEN', 'Solo el propietario puede cancelar su presencia voluntaria.', 403);
