@@ -290,3 +290,26 @@ test('avatar-pathfinding: synthetic room access validation', () => {
   assert.equal(validateRoomAccess(personalRoom, readOnlyContext), false);
   assert.equal(validateRoomAccess(personalRoom, null), false);
 });
+
+test('security: unknown room scopes fail closed rather than granting read access', () => {
+  const room = createSampleRoom({ scope: 'private-experimental' });
+  assert.equal(validateRoomAccess(room, {
+    owner_id: 'alice', capabilities: ['space.read'],
+  }), false);
+});
+
+test('security: path search rejects unbounded CPU budgets and invalid room geometry', () => {
+  const room = createSampleRoom();
+  const start = { x: 0, y: 0 };
+  const target = { x: 1, y: 1 };
+  for (const maxNodes of [0, -1, Infinity, 100000000, 1.5, NaN]) {
+    const result = findPath(room, start, target, { maxNodes });
+    assert.equal(result.found, false);
+    assert.equal(result.reason, 'INVALID_LIMIT');
+  }
+  for (const width of [0, -1, Infinity, 1.4]) {
+    const result = findPath({ ...room, width }, start, target);
+    assert.equal(result.found, false);
+    assert.equal(result.reason, 'INVALID_ROOM');
+  }
+});
