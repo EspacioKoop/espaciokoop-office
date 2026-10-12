@@ -109,10 +109,14 @@ export function checkRoomAccess(room, context) {
  * Builds a strictly formatted layout command.
  */
 export function prepareLayoutCommand(type, params) {
-  if (typeof type !== 'string') {
+  if (typeof type !== 'string' || !type.length ||
+      !params || typeof params !== 'object' || Array.isArray(params) ||
+      Object.hasOwn(params, 'type')) {
     throw new SpaceError('INVALID_INPUT');
   }
-  return { type, ...params };
+  // A user-provided params.type must not replace the operation authorised by
+  // the caller. Keep the canonical type last even on prototype-bearing inputs.
+  return { ...params, type };
 }
 
 /**
