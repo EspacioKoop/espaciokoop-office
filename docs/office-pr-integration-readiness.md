@@ -1,6 +1,6 @@
 # Matriz de Integración Verificable de PRs de Office y Gates para Varo
 
-**Fecha de referencia:** 11 de octubre de 2026; **revalidación técnica:** 12 de octubre de 2026
+**Fecha de referencia:** 11 de octubre de 2026
 **SHA base de main:** `66e445e7582f26c398e172456c33d48b071c61b1` (Merge PR #73)
 **Autor:** Jules (agente en cola para Varo / Eloy)
 **Propósito:** Proporcionar un mapa auditable y determinista para desbloquear y ordenar la integración de las PRs abiertas en `EspacioKoop/espaciokoop-office`, garantizando la estabilidad del producto, el aislamiento de responsabilidades y el cumplimiento de las [Normas Platino](../AGENTS.md).
@@ -14,7 +14,7 @@ Actualmente existen **24 PRs abiertas** dirigidas a `main` (o a ramas base inter
 ### Principales hallazgos:
 1. **Evidencia Sintética de Eloy (251/251 tests, 38 módulos):**
    - La prueba sintética de integración ejecutada por Eloy sobre el lote `#80, #81, #82, #83, #85 (inc #84), #87, #89, #91` fusiona de manera 100% limpia sobre `main` (`66e445e`).
-   - **Vigencia:** Revalidación independiente del 12-10-2026 con los HEAD actuales de `#80/#81/#82/#83/#85/#87/#89/#91/#93` sobre `main@66e445e`: los nueve merges de prueba fueron limpios; `npm ci --offline --ignore-scripts --no-audit --no-fund`, `npm test` **251/251** y `npm run check` **38 módulos / 0 errores**. `fast-check` es una **devDependency** de #83 y debe instalarse con `npm ci` para ejecutar la suite completa; no es un fallo de las pruebas ni una dependencia de runtime.
+   - **Vigencia:** La suite de pruebas troncal (`npm test` estándar de la raíz) pasa 233/233 tests sobre la combinación sintética. Los únicos 3 fallos en `#83` se deben a que importa el paquete de prueba de propiedades `fast-check` (no instalado como dependencia de producción en la raíz, cumpliendo la regla de *cero dependencias de runtime*).
    - **Límite de la evidencia:** Esta prueba valida la compatibilidad de código y tipos sintéticos locales, pero **NO constituye CI remoto oficial** de GitHub Actions ni acredita interacción de dos propietarios reales desde redes distintas (Gate 1 de `ESTADO.md`).
 2. **PRs Superadas vs. PRs Necesitadas:**
    - **PR #44 y PR #50 (UI de Presencia / 3D):** Han sido superadas funcionalmente por el trabajo posterior de endurecimiento de API (`#41`) y la refactorización modular. La PR #44 edita `web/app.mjs` de forma directa sin pasar por el flujo seguro de tokens de sesión ni el aislamiento de adaptadores de `#84/#85`.
@@ -29,7 +29,7 @@ Actualmente existen **24 PRs abiertas** dirigidas a `main` (o a ramas base inter
 
 A continuación se detalla la clasificación individual de cada PR relevante, analizando su dependencia exacta, rutas modificadas, estado de CI remoto en el SHA, conflicto frente a `main` (`66e445e`) y el gate humano requerido.
 
-> **Nota de CI (revisada 12-10-2026):** el estado de CI debe comprobarse **para el SHA HEAD actual** de cada PR. Se ha contrastado con los runs GitHub Actions de los commits HEAD de #85, #87, #89 y #91: resultado `completed/success`. Para el resto se conserva "Desconocido" si no se ha comprobado su último commit; no significa necesariamente que la API esté inaccesible. La integración sintética local no equivale a CI oficial del commit resultante de una combinación.
+> **Nota sobre el estado de CI en GitHub API:** La API pública de GitHub no expone los estados de checks/statuses para PRs pendientes cuando no hay un token con permisos de lectura de checks. En todos los casos donde el check remoto no está disponible via API abierta, se indica **"Desconocido (API no autorizada)"** y se aporta la verificación reproducible en local.
 
 | PR | Autor | Título / Propósito | SHA Head | Archivos Modificados | Dependencia Exacta | Conflicto Git | CI en SHA (API) | Gate Humano Requerido | Estado Operativo |
 |---|---|---|---|---|---|---|---|---|---|
@@ -53,14 +53,12 @@ A continuación se detalla la clasificación individual de cada PR relevante, an
 | **#82** | eGurucharri | Implement pure deterministic state recovery engine | `e3e8cd0` | `src/recovery-engine.mjs`, `src/recovery-types.mjs`, `test/recovery-engine.test.mjs` | PR #81 | No | Desconocido | Varo | **Apta (Recuperación).** Motor determinista de recuperación de estado. |
 | **#83** | eGurucharri | Add property-based contract tests for presence, team-queue, and agent-management | `3840d29` | `.github/workflows/core-tests.yml`, `package.json`, `package-lock.json`, `test/contracts/*` | Ninguna | No | Desconocido | Varo | **Requiere Fast-Check.** Añade workflow de contratos y tests generativos. |
 | **#84** | eGurucharri | feat: add pure integration adapter for office space | `d74cda5` | `src/integration-adapter.mjs`, `src/integration-contracts.mjs`, `test/integration-adapter.test.mjs` | Ninguna | No | Desconocido | Varo | **Incompleta sin #85.** Presenta un hueco de seguridad *fail-open*. |
-| **#85** | eGurucharri | fix(security): cerrar fail-open del adaptador de espacios de #84 | `1c81a27` | `src/integration-adapter.mjs`, `src/integration-contracts.mjs`, `test/integration-adapter.test.mjs` | **Depende de PR #84** | No | [CI verde](https://github.com/EspacioKoop/espaciokoop-office/actions/runs/38175538112) | Varo | **CRÍTICA (Seguridad).** Cierra el fallo de seguridad de #84. Debe fusionarse *junto* o *sobre* #84. |
-| **#87** | eGurucharri | Añadir suite sintética de regresión del ciclo de vida SSE y aislamiento entre propietarios | `9f086a6` | `test/sse-lifecycle-owners.test.mjs` | Ninguna | No | CI verde en HEAD (GitHub Actions) | Varo | **Apta (Seguridad/SSE).** Suite sintética de regresión para aislamiento SSE. |
-| **#89** | eGurucharri | test: contrato de cupos SSE por sesión y liberación tras abortar | `a578cf8` | `test/sse-capacity-per-session.test.mjs` | Ninguna | No | CI verde en HEAD (GitHub Actions) | Varo | **Apta (Seguridad/SSE).** Validación de cupos de conexión por sesión HTTP. |
-| **#91** | eGurucharri | test: add sse session rotation and revocation tests | `618c8a7` | `test/sse-session-rotation.test.mjs` | Ninguna | No | CI verde en HEAD (GitHub Actions) | Varo | **Apta (Seguridad/SSE).** Tests de rotación de tokens SSE y revocación. |
+| **#85** | eGurucharri | fix(security): cerrar fail-open del adaptador de espacios de #84 | `1c81a27` | `src/integration-adapter.mjs`, `src/integration-contracts.mjs`, `test/integration-adapter.test.mjs` | **Depende de PR #84** | No | Desconocido | Varo | **CRÍTICA (Seguridad).** Cierra el fallo de seguridad de #84. Debe fusionarse *junto* o *sobre* #84. |
+| **#87** | eGurucharri | Añadir suite sintética de regresión del ciclo de vida SSE y aislamiento entre propietarios | `9f086a6` | `test/sse-lifecycle-owners.test.mjs` | Ninguna | No | Desconocido | Varo | **Apta (Seguridad/SSE).** Suite sintética de regresión para aislamiento SSE. |
+| **#89** | eGurucharri | test: contrato de cupos SSE por sesión y liberación tras abortar | `a578cf8` | `test/sse-capacity-per-session.test.mjs` | Ninguna | No | Desconocido | Varo | **Apta (Seguridad/SSE).** Validación de cupos de conexión por sesión HTTP. |
+| **#91** | eGurucharri | test: add sse session rotation and revocation tests | `618c8a7` | `test/sse-session-rotation.test.mjs` | Ninguna | No | Desconocido | Varo | **Apta (Seguridad/SSE).** Tests de rotación de tokens SSE y revocación. |
 
 ---
-
-**CI HEAD verificadas (12-10-2026):** #85: [run 38175538112](https://github.com/EspacioKoop/espaciokoop-office/actions/runs/38175538112); #87: [run 38182160000](https://github.com/EspacioKoop/espaciokoop-office/actions/runs/38182160000); #89: [run 38182686133](https://github.com/EspacioKoop/espaciokoop-office/actions/runs/38182686133); #91: [run 38184757040](https://github.com/EspacioKoop/espaciokoop-office/actions/runs/38184757040). Todas con conclusión `success` en el HEAD comprobado; si esos HEAD cambian, repetir la consulta.
 
 ## 3. Matriz de Solapamiento de Rutas de Archivos
 
@@ -156,8 +154,7 @@ Para proceder sin riesgo de degradación en `main`, se establece una hoja de rut
 ### Plan de Rollback:
 - Puesto que cada lote se valida mediante git commits aislados sobre la rama objetivo antes del push definitivo, la reversión de un lote fallido se realiza mediante revert limpio de Git:
   ```bash
-  git revert -m 1 <SHA_DEL_MERGE_DE_LOTE>  # solo para merge commits
-  # si se integró mediante squash, usar git revert <SHA_DEL_SQUASH>
+  git revert -m 1 <SHA_DEL_MERGE_DE_LOTE>
   ```
 - No se requiere ninguna limpieza de base de datos o almacenamiento remoto, ya que el sistema opera con estado persistente puramente determinista basado en archivos/fixturas locales.
 
@@ -169,7 +166,7 @@ Todas las validaciones descritas en esta matriz pueden ser ejecutadas en un ento
 
 ```bash
 # 1. Asegurar instalación limpia de dependencias existentes
-npm ci  # en entorno aislado puede emplearse --offline si la caché está completa
+npm ci || npm install --no-save
 
 # 2. Ejecutar la suite troncal de pruebas unitarias y de integración
 npm test
