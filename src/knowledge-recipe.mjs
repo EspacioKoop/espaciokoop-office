@@ -128,10 +128,31 @@ export function createKnowledgeRecipeEngine(policy) {
   const recipes = new Map();
   const operations = new Map();
 
-  function read(recipeId) {
-    insist(typeof recipeId === 'string' && idPattern.test(recipeId), 'INVALID_RECIPE', 'Identificador de receta no válido.');
+  // Internal readback stays private: no caller-controlled identity is trusted.
+  function readInternal(recipeId) {
+    insist(typeof recipeId === 'string' && idPattern.test(recipeId),
+      'INVALID_RECIPE', 'Identificador de receta no válido.');
     const recipe = recipes.get(recipeId);
     return recipe ? structuredClone(recipe) : null;
+  }
+
+  // The caller identity MUST come from the authenticated host/session. The
+  // recipe engine enforces participation but cannot authenticate an HTTP user.
+  function assertActor(actorTeamId) {
+    insist(typeof actorTeamId === 'string' && idPattern.test(actorTeamId),
+      'FORBIDDEN', 'Identidad de equipo requerida.', 403);
+    insist(policy.members.some(member => member.id === actorTeamId),
+      'FORBIDDEN', 'Equipo no autorizado.', 403);
+  }
+
+  function read(recipeId, { actor_team_id: actorTeamId } = {}) {
+    assertActor(actorTeamId);
+    const record = readInternal(recipeId);
+    if (record === null) return null;
+    insist(record.requester_team_id === actorTeamId ||
+           record.target_team_id === actorTeamId,
+      'FORBIDDEN', 'La receta no pertenece al equipo.', 403);
+    return record;
   }
 
   function execute(rawOperation) {
@@ -153,7 +174,7 @@ export function createKnowledgeRecipeEngine(policy) {
       return structuredClone(existingOp.result);
     }
 
-    const current = read(rawOperation.recipe_id);
+    const current = readInternal(rawOperation.recipe_id);
 
     if (rawOperation.action === 'create') {
       insist(current === null && rawOperation.expected_version === null, 'VERSION_CONFLICT', 'La receta ya existe o la versión esperada no es nula.', 409);
@@ -175,7 +196,7 @@ export function createKnowledgeRecipeEngine(policy) {
 
       recipes.set(validated.recipe_id, record);
 
-      const readBack = read(validated.recipe_id);
+      const readBack = readInternal(validated.recipe_id);
       insist(readBack !== null && readBack.effective_version === 1 && readBack.stage === 'requested',
         'READBACK_MISMATCH', 'Inconsistencia en la verificación de lectura (read-back).', 500);
 
@@ -285,7 +306,7 @@ export function createKnowledgeRecipeEngine(policy) {
     current.effective_version = nextVersion;
     recipes.set(current.recipe_id, current);
 
-    const readBack = read(current.recipe_id);
+    const readBack = readInternal(current.recipe_id);
     insist(readBack !== null && readBack.effective_version === nextVersion && readBack.stage === nextStage,
       'READBACK_MISMATCH', 'Inconsistencia en la verificación de lectura (read-back).', 500);
 
@@ -301,15 +322,22 @@ export function createKnowledgeRecipeEngine(policy) {
   }
 
   function list(filter = {}) {
-    let result = Array.from(recipes.values()).map(r => structuredClone(r));
+    insist(filter && typeof filter === 'object' && !Array.isArray(filter),
+      'FORBIDDEN', 'Filtro de consulta no válido.', 403);
+    const actorTeamId = filter.actor_team_id;
+    assertActor(actorTeamId);
+    if (filter.team_id !== undefined) {
+      insist(filter.team_id === actorTeamId, 'FORBIDDEN',
+        'No se pueden enumerar recetas de otros equipos.', 403);
+    }
+    let result = Array.from(recipes.values())
+      .filter(r => r.requester_team_id === actorTeamId || r.target_team_id === actorTeamId)
+      .map(r => structuredClone(r));
     if (filter.stage) {
       result = result.filter(r => r.stage === filter.stage);
     }
     if (filter.source) {
       result = result.filter(r => r.source.toLowerCase() === String(filter.source).toLowerCase());
-    }
-    if (filter.team_id) {
-      result = result.filter(r => r.requester_team_id === filter.team_id || r.target_team_id === filter.team_id);
     }
     return result;
   }
