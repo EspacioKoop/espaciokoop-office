@@ -42,8 +42,16 @@ function fileList(value, { required }) {
   }
   insist(value.length > 0 && value.length <= 20, 'CLAIM_EVENT', 'Un CLAIM debe declarar entre 1 y 20 archivos.');
   const cleaned = value.map(entry => {
-    insist(typeof entry === 'string' && entry.trim().length > 0 && entry.length <= 240, 'CLAIM_EVENT', 'Ruta de archivo no válida.');
-    return entry.trim();
+    insist(typeof entry === 'string' && entry.trim().length > 0 && entry.length <= 240,
+      'CLAIM_EVENT', 'Ruta de archivo no válida.');
+    // Reject aliases which could defeat the shared reservation of the same Git path.
+    // Paths are repository-relative POSIX names; no filesystem operations occur here.
+    const segments = entry.split('/');
+    insist(entry === entry.trim() && !entry.includes('\\\\') &&
+      !/[\\x00-\\x1f\\x7f]/.test(entry) &&
+      segments.every(part => part.length > 0 && part !== '.' && part !== '..'),
+      'CLAIM_EVENT', 'Ruta no canónica en CLAIM.');
+    return entry;
   });
   insist(new Set(cleaned).size === cleaned.length, 'CLAIM_EVENT', 'Archivos duplicados en el mismo evento.');
   return cleaned;
@@ -168,6 +176,10 @@ export function buildClaimRegistry(rawEvents, { now } = {}) {
         conflicts.push({ kind: 'BRANCH_OWNED_BY_OTHER', event, holder: publicClaim(liveExisting) });
         continue;
       }
+      if (liveExisting && liveExisting.issue !== event.issue) {
+        conflicts.push({ kind: 'BRANCH_ISSUE_MISMATCH', event, holder: publicClaim(liveExisting) });
+        continue;
+      }
       const blocker = activeOthersOverlap(event.branch, event.files, event.at);
       if (blocker) {
         conflicts.push({ kind: 'FILES_RESERVED', event, holder: publicClaim(blocker) });
@@ -191,7 +203,7 @@ export function buildClaimRegistry(rawEvents, { now } = {}) {
       });
     } else if (event.type === 'PR_READY') {
       const existing = claims.get(event.branch);
-      if (!existing || existing.released || existing.agent !== event.agent) {
+      if (!existing || existing.released || existing.agent !== event.agent || existing.issue !== event.issue) {
         rejected.push({ kind: 'ORPHAN_PR_READY', event });
         continue;
       }
@@ -204,7 +216,7 @@ export function buildClaimRegistry(rawEvents, { now } = {}) {
       existing.prReady = true;
     } else { // RELEASE
       const existing = claims.get(event.branch);
-      if (!existing) {
+      if (!existing || existing.agent !== event.agent || existing.issue !== event.issue) {
         rejected.push({ kind: 'ORPHAN_RELEASE', event });
         continue;
       }
