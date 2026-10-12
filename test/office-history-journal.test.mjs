@@ -250,3 +250,19 @@ test('exportacion e importacion de estado (serializacion roundtrip)', () => {
 
   assert.deepEqual(view1, view2);
 });
+
+test('seguridad: eventos sin proyecto son privados para su propietario', () => {
+  const journal = createOfficeHistoryJournal({ policy: demoPolicy });
+  journal.appendEvent(makeNarrativeEvent('evt-private-owner', {
+    projectId: null,
+    author: 'aurora/cronista',
+    ownerId: 'aurora',
+    payload: { summary: 'Nota personal de equipo.' },
+  }));
+  const own = journal.getEvents({ ownerId: 'aurora' });
+  const other = journal.getEvents({ ownerId: 'marea' });
+  assert.equal(own.totalItems, 1);
+  assert.equal(other.totalItems, 0);
+  assert.equal(journal.generateNewspaper({ ownerId: 'marea' }).pagination.totalItems, 0);
+  assert.equal(journal.generateNewspaper({ ownerId: 'aurora' }).pagination.totalItems, 1);
+});
