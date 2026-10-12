@@ -126,8 +126,13 @@ export function applyNeedsAction(state, action) {
 
   // Seguridad: El estado lúdico NUNCA concede ni acepta permisos, presupuestos ni tokens reales
   const forbiddenKeys = ['permissions', 'budget', 'credentials', 'token', 'access', 'realAgentId', 'api_key', 'wallet'];
+  const forbiddenNormalized = new Set(forbiddenKeys.map(key => key.toLowerCase()));
+  for (const key of Reflect.ownKeys(resource)) {
+    insist(typeof key === 'string' && !forbiddenNormalized.has(key.toLowerCase()),
+      'SECURITY_VIOLATION', 'El recurso sintético no debe incluir datos de acceso ni presupuestos reales.');
+  }
   for (const key of forbiddenKeys) {
-    insist(!(key in resource), 'SECURITY_VIOLATION', 'El recurso sintético no debe incluir datos de acceso ni presupuestos reales.');
+    insist(!(key in resource), 'SECURITY_VIOLATION', 'El recurso sintético no debe heredar datos de acceso ni presupuestos reales.');
   }
 
   const amount = resource.amount !== undefined ? resource.amount : 25;
