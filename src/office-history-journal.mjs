@@ -158,7 +158,9 @@ export function createOfficeHistoryJournal({ policy, maxEvents = 10000 } = {}) {
       const project = policy.projects.find(p => p.repo === event.projectId);
       if (!project || !project.readers.includes(memberId)) return false;
     } else {
-      if (event.ownerId !== memberId && !policy.members.some(m => m.id === memberId)) return false;
+      // Events without a project are owner-private. Being a valid member of
+      // Office must not grant access to another owner's private journal.
+      if (event.ownerId !== memberId) return false;
     }
     return true;
   }
