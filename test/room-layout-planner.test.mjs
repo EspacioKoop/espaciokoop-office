@@ -277,3 +277,16 @@ test('capacity constraints and revoked access guards', () => {
 
   throwsCode(() => executePlannerCommand(state, createRoomCmd(), ctxRevoked), 'ACCESS_REVOKED');
 });
+
+test('security: caller operation type cannot be replaced by untrusted params', () => {
+  throwsCode(() => prepareLayoutCommand('furniture.place', {
+    type: 'room.delete',
+    room_id: 'main-room',
+  }), 'INVALID_INPUT');
+  throwsCode(() => prepareLayoutCommand('furniture.place', null), 'INVALID_INPUT');
+  throwsCode(() => prepareLayoutCommand('furniture.place', []), 'INVALID_INPUT');
+  throwsCode(() => prepareLayoutCommand('', {}), 'INVALID_INPUT');
+  const valid = prepareLayoutCommand('furniture.place', { item_id: 'desk-1' });
+  assert.equal(valid.type, 'furniture.place');
+  assert.equal(valid.item_id, 'desk-1');
+});
