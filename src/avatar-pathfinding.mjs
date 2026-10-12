@@ -65,8 +65,12 @@ export function findPath(room, start, target, options = {}) {
     catalogue = DEFAULT_CATALOGUE,
   } = options;
 
-  if (!room || typeof room.width !== 'number' || typeof room.height !== 'number') {
+  if (!room || !Number.isSafeInteger(room.width) || !Number.isSafeInteger(room.height) ||
+      room.width < 1 || room.height < 1) {
     return { found: false, path: [], cost: 0, steps: 0, reason: 'INVALID_ROOM' };
+  }
+  if (!Number.isSafeInteger(maxNodes) || maxNodes < 1 || maxNodes > 4096) {
+    return { found: false, path: [], cost: 0, steps: 0, reason: 'INVALID_LIMIT' };
   }
 
   if (!start || !target || !Number.isInteger(start.x) || !Number.isInteger(start.y) ||
@@ -245,7 +249,8 @@ export function validateRoomAccess(room, context) {
     return room.owner_id === context.owner_id;
   }
   if (room.scope === 'common') {
-    return context.capabilities.includes('space.edit_common') || context.capabilities.includes('space.read');
+    return context.capabilities.includes('space.read');
   }
-  return true;
+  // Unknown or future room scopes are not public by default.
+  return false;
 }
