@@ -9,19 +9,19 @@ en los equipos de las dos partes, ni reemplaza la autorización de Varo.
 
 | Bloque | PR definitiva | Alcance y limitaciones |
 | --- | --- | --- |
-| Ciclo de vida SSE y aislamiento | [#87](../pull/87) | Pruebas sintéticas |
-| Cuotas SSE por sesión | [#89](../pull/89) | Tests, sin alterar las cuotas |
-| Rotación y revocación SSE | [#96](../pull/96) | Recupera la antigua #91 |
-| Office Space fail-closed | [#97](../pull/97) | Adaptador puro y corrección conjunta de #84/#85 |
-| Refresco UI por evento space | [#98](../pull/98) | Listener + regresión de cliente de #95 |
-| Accesibilidad del panel y cola | [#99](../pull/99) | Tests de teclado, foco, contraste |
-| Motor de recuperación | [#100](../pull/100) | Componente puro; no reintentos autónomos |
-| Persistencia de diarios y recetas | [#101](../pull/101) | Staging, opt-in para sobrescritura; no endpoints |
-| Propiedades de contratos | [#102](../pull/102) | fast-check solo dev, lockfile y CI |
-| Registro CLAIM/RELEASE | [#103](../pull/103) | Núcleo puro; no escribe comentarios GitHub |
-| Planificador de salas | [#104](../pull/104) | Geometría y pruebas; no acceso HTTP nuevo |
-| Movimiento y pathfinding | [#105](../pull/105) | Cota CPU y acceso fail-closed |
-| Diario/periódico | [#106](../pull/106) | Aislamiento de eventos sin proyecto por propietario |
+| Ciclo de vida SSE y aislamiento | [#87](https://github.com/EspacioKoop/espaciokoop-office/pull/87) | Pruebas sintéticas |
+| Cuotas SSE por sesión | [#89](https://github.com/EspacioKoop/espaciokoop-office/pull/89) | Tests, sin alterar las cuotas |
+| Rotación y revocación SSE | [#96](https://github.com/EspacioKoop/espaciokoop-office/pull/96) | Recupera la antigua #91 |
+| Office Space fail-closed | [#97](https://github.com/EspacioKoop/espaciokoop-office/pull/97) | Adaptador puro y corrección conjunta de #84/#85 |
+| Refresco UI por evento space | [#98](https://github.com/EspacioKoop/espaciokoop-office/pull/98) | Listener + regresión de cliente de #95 |
+| Accesibilidad del panel y cola | [#99](https://github.com/EspacioKoop/espaciokoop-office/pull/99) | Tests de teclado, foco, contraste |
+| Motor de recuperación | [#100](https://github.com/EspacioKoop/espaciokoop-office/pull/100) | Componente puro; no reintentos autónomos |
+| Persistencia de diarios y recetas | [#101](https://github.com/EspacioKoop/espaciokoop-office/pull/101) | Staging, opt-in para sobrescritura; no endpoints |
+| Propiedades de contratos | [#102](https://github.com/EspacioKoop/espaciokoop-office/pull/102) | fast-check solo dev, lockfile y CI |
+| Registro CLAIM/RELEASE | [#103](https://github.com/EspacioKoop/espaciokoop-office/pull/103) | Núcleo puro; no escribe comentarios GitHub |
+| Planificador de salas | [#104](https://github.com/EspacioKoop/espaciokoop-office/pull/104) | Geometría y pruebas; no acceso HTTP nuevo |
+| Movimiento y pathfinding | [#105](https://github.com/EspacioKoop/espaciokoop-office/pull/105) | Cota CPU y acceso fail-closed |
+| Diario/periódico | [#106](https://github.com/EspacioKoop/espaciokoop-office/pull/106) | Aislamiento de eventos sin proyecto por propietario |
 
 Las PR anteriores superaron el workflow de la rama de PR en Node 22
 y Node 24 **en el SHA que se fusionó**. Eso no equivale a una prueba real
