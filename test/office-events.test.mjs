@@ -351,4 +351,72 @@ describe('Office Events pure engine', () => {
     assert.equal(view.voluntaryPresence[0].avatarId, 'aurora-avatar');
     assert.equal(view.voluntaryPresence[1].avatarId, 'marea-avatar');
   });
+
+  test('security: cancelling a primary occurrence also cancels future series members', () => {
+    const calendar = createOfficeCalendar({ policy: demoPolicy, now: () => baseTime });
+    const parent = calendar.scheduleEvent({
+      idempotencyKey: 'cancel-whole-series', ownerId: 'aurora',
+      roomId: 'room-series', title: 'Daily team meeting',
+      startTimestamp: baseTime + 10000, endTimestamp: baseTime + 20000,
+      recurrence: { frequency: 'daily', interval: 1, count: 3 },
+    });
+    const before = calendar.listEvents({ roomId: 'room-series' });
+    assert.equal(before.length, 3);
+    assert.equal(before.filter(row => row.parentEventId === parent.eventId).length, 2);
+    assert.throws(
+      () => calendar.cancelEvent({ eventId: parent.eventId, ownerId: 'marea' }),
+      err => err.code === 'EVENT_FORBIDDEN',
+    );
+    assert.equal(calendar.listEvents({ roomId: 'room-series' }).length, 3);
+    const cancelled = calendar.cancelEvent({
+      eventId: parent.eventId, ownerId: 'aurora', reason: 'series withdrawn',
+    });
+    assert.equal(cancelled.status, 'cancelled');
+    const after = calendar.listEvents({ roomId: 'room-series', includeCancelled: true });
+    assert.equal(after.length, 3);
+    assert.ok(after.every(row => row.status === 'cancelled'));
+    assert.ok(after.every(row => row.cancelReason === 'series withdrawn'));
+    assert.equal(calendar.listEvents({ roomId: 'room-series' }).length, 0);
+  });
+
+  test('security: cancelling one child leaves primary and siblings scheduled', () => {
+    const calendar = createOfficeCalendar({ policy: demoPolicy, now: () => baseTime });
+    const parent = calendar.scheduleEvent({
+      idempotencyKey: 'cancel-one-child', ownerId: 'aurora',
+      roomId: 'room-child', title: 'Daily meeting',
+      startTimestamp: baseTime + 10000, endTimestamp: baseTime + 20000,
+      recurrence: { frequency: 'daily', count: 3 },
+    });
+    const children = calendar.listEvents({ roomId: 'room-child' })
+      .filter(row => row.parentEventId === parent.eventId);
+    assert.equal(children.length, 2);
+    calendar.cancelEvent({ eventId: children[0].eventId, ownerId: 'aurora' });
+    assert.equal(calendar.getEvent(parent.eventId).status, 'scheduled');
+    assert.equal(calendar.getEvent(children[1].eventId).status, 'scheduled');
+    assert.equal(calendar.getEvent(children[0].eventId).status, 'cancelled');
+  });
+
+  test('security: identical avatar IDs cannot overwrite another owner voluntary presence', () => {
+    const calendar = createOfficeCalendar({ policy: demoPolicy, now: () => baseTime });
+    const base = { avatarId: 'shared-avatar', roomId: 'shared-room' };
+    calendar.registerVoluntaryPresence({
+      ...base, ownerId: 'aurora', avatarLabel: 'Aurora private projection',
+    });
+    calendar.registerVoluntaryPresence({
+      ...base, ownerId: 'marea', avatarLabel: 'Marea projection',
+    });
+    const view = () => calendar.getAccessibleView({
+      memberId: 'aurora', roomId: 'shared-room', atTimestamp: baseTime,
+    }).voluntaryPresence;
+    assert.equal(view().length, 2);
+    assert.deepEqual(new Set(view().map(row => row.ownerId)), new Set(['aurora', 'marea']));
+    calendar.cancelVoluntaryPresence({ ...base, ownerId: 'marea' });
+    const aurora = view().find(row => row.ownerId === 'aurora');
+    assert.equal(aurora.status, 'registered');
+    assert.equal(aurora.avatarLabel, 'Aurora private projection');
+    assert.equal(view().length, 1);
+    assert.equal(calendar.cancelVoluntaryPresence({ ...base, ownerId: 'marea' }).status, 'cancelled');
+    assert.equal(view().length, 1);
+  });
+
 });
