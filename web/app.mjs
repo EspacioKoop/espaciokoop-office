@@ -155,6 +155,7 @@ function detail(task) {
 function watchSession() {
   if (events) events.close();
   events = new EventSource('/api/events');
+  events.addEventListener('space', () => refresh());
   events.addEventListener('revoke', () => clearView('La política o el acceso ha cambiado. La vista se ha retirado.'));
   events.onerror = () => clearView('Se ha perdido la señal de sesión. La vista se ha retirado; vuelve a entrar.');
 }
