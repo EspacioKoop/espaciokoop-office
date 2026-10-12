@@ -223,3 +223,23 @@ test('necesidades de avatar: motor lúdico encadenado y pausa/resume', () => {
   engine.tick(5);
   assert.equal(engine.getState().needs.energia, 75);
 });
+
+test('security: estado manipulado no puede entrar en ticks, acciones ni pausa', () => {
+  const valid = createAvatarNeeds('avatar-1');
+  const malformed = { ...valid, tick_count: -1 };
+  assert.throws(() => tickNeeds(malformed, 1), err => err instanceof LifeNeedsError);
+  assert.throws(() => applyNeedsAction(malformed, {
+    type: 'alimentarse', resource: { synthetic: true, amount: 10 },
+  }), err => err instanceof LifeNeedsError);
+  assert.throws(() => setNeedsPaused(malformed, true), err => err instanceof LifeNeedsError);
+});
+
+test('security: no se permite desbordar tick_count ni inyectar campos extra', () => {
+  const valid = createAvatarNeeds('avatar-1');
+  assert.throws(() => createAvatarNeeds('avatar-2', { permissions: ['admin'] }),
+    err => err instanceof LifeNeedsError && err.code === 'INVALID_INPUT');
+  const almostFull = { ...valid, tick_count: Number.MAX_SAFE_INTEGER };
+  assert.throws(() => tickNeeds(almostFull, 1),
+    err => err instanceof LifeNeedsError && err.code === 'INVALID_DELTA_TICKS');
+  assert.equal(tickNeeds(almostFull, 0).tick_count, Number.MAX_SAFE_INTEGER);
+});
