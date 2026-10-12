@@ -480,3 +480,126 @@ test('defect: rechazo de doble rollback (transicion irreversible y prevencion de
   assert.equal(ledger.getAvatar('a1').balance, 100);
   assert.equal(ledger.getAvatar('a2').balance, 100);
 });
+
+test('defect: trade.accept con propuesta con objetos sin alterar balances, items, versiones ni propuesta si falta objeto', async () => {
+  const ledger = createOfficeTradeLedger();
+
+  await ledger.execute({
+    operation_id: 'r1', actor_id: 'a1', capability: 'avatar.register', expected_versions: {},
+    input: { avatar_id: 'a1', owner_id: 'a1', initial_balance: 100, initial_items: [{ id: 'gem', quantity: 1 }] },
+  });
+  await ledger.execute({
+    operation_id: 'r2', actor_id: 'a2', capability: 'avatar.register', expected_versions: {},
+    input: { avatar_id: 'a2', owner_id: 'a2', initial_balance: 100, initial_items: [{ id: 'ring', quantity: 1 }] },
+  });
+
+  // a1 propone intercambiar gem por ring
+  await ledger.execute({
+    operation_id: 'p1', actor_id: 'a1', capability: 'trade.propose', expected_versions: {},
+    input: {
+      proposal_id: 'pr_items', proposer_avatar_id: 'a1', counterparty_avatar_id: 'a2',
+      offered_currency: 0, offered_items: [{ id: 'gem', quantity: 1 }],
+      requested_currency: 0, requested_items: [{ id: 'ring', quantity: 2 }], // a2 only has 1 ring!
+    },
+  });
+
+  const snapA1Before = ledger.getAvatar('a1');
+  const snapA2Before = ledger.getAvatar('a2');
+  const propBefore = ledger.getProposal('pr_items');
+
+  const accRes = await ledger.execute({
+    operation_id: 'acc_fail', actor_id: 'a2', capability: 'trade.accept', expected_versions: {},
+    input: { proposal_id: 'pr_items', acceptor_avatar_id: 'a2' },
+  });
+
+  assert.equal(accRes.status, 'rejected');
+  assert.equal(accRes.code, 'INSUFFICIENT_ITEMS');
+
+  // Estado inalterado salvo el registro de la operación rechazada
+  assert.deepEqual(ledger.getAvatar('a1'), snapA1Before);
+  assert.deepEqual(ledger.getAvatar('a2'), snapA2Before);
+  assert.deepEqual(ledger.getProposal('pr_items'), propBefore);
+  assert.equal(ledger.getProposal('pr_items').status, 'pending');
+});
+
+test('defect: trade.rollback de trade.direct y trade.accept rechaza intruder y previene doble rollback', async () => {
+  const ledger = createOfficeTradeLedger();
+
+  await ledger.execute({
+    operation_id: 'r1', actor_id: 'a1', capability: 'avatar.register', expected_versions: {},
+    input: { avatar_id: 'a1', owner_id: 'a1', initial_balance: 100, initial_items: [{ id: 'wand', quantity: 1 }] },
+  });
+  await ledger.execute({
+    operation_id: 'r2', actor_id: 'a2', capability: 'avatar.register', expected_versions: {},
+    input: { avatar_id: 'a2', owner_id: 'a2', initial_balance: 100, initial_items: [{ id: 'potion', quantity: 1 }] },
+  });
+
+  // 1) Test trade.direct rollback auth & double rollback
+  const dirRes = await ledger.execute({
+    operation_id: 'td1', actor_id: 'a1', capability: 'trade.direct', expected_versions: {},
+    input: { from_avatar_id: 'a1', to_avatar_id: 'a2', currency: 20, items: [{ id: 'wand', quantity: 1 }] },
+  });
+  assert.equal(dirRes.status, 'applied');
+
+  // Intruder intenta rollback
+  const dirIntruder = await ledger.execute({
+    operation_id: 'rb_td_intruder', actor_id: 'intruder', capability: 'trade.rollback', expected_versions: {},
+    input: { target_operation_id: 'td1' },
+  });
+  assert.equal(dirIntruder.status, 'rejected');
+  assert.equal(dirIntruder.code, 'FORBIDDEN');
+
+  // Rollback autorizado por a2 (receptor)
+  const dirRb1 = await ledger.execute({
+    operation_id: 'rb_td_valid', actor_id: 'a2', capability: 'trade.rollback', expected_versions: {},
+    input: { target_operation_id: 'td1' },
+  });
+  assert.equal(dirRb1.status, 'applied');
+
+  // Segundo rollback a trade.direct con op_id distinto
+  const dirRb2 = await ledger.execute({
+    operation_id: 'rb_td_double', actor_id: 'a1', capability: 'trade.rollback', expected_versions: {},
+    input: { target_operation_id: 'td1' },
+  });
+  assert.equal(dirRb2.status, 'rejected');
+  assert.equal(dirRb2.code, 'INVALID_ROLLBACK');
+
+  // 2) Test trade.accept rollback auth & double rollback
+  await ledger.execute({
+    operation_id: 'p2', actor_id: 'a1', capability: 'trade.propose', expected_versions: {},
+    input: {
+      proposal_id: 'pr_acc', proposer_avatar_id: 'a1', counterparty_avatar_id: 'a2',
+      offered_currency: 10, offered_items: [], requested_currency: 0, requested_items: [{ id: 'potion', quantity: 1 }],
+    },
+  });
+
+  const accRes = await ledger.execute({
+    operation_id: 'op_acc', actor_id: 'a2', capability: 'trade.accept', expected_versions: {},
+    input: { proposal_id: 'pr_acc', acceptor_avatar_id: 'a2' },
+  });
+  assert.equal(accRes.status, 'applied');
+
+  // Intruder intenta rollback de trade.accept
+  const accIntruder = await ledger.execute({
+    operation_id: 'rb_acc_intruder', actor_id: 'intruder', capability: 'trade.rollback', expected_versions: {},
+    input: { target_operation_id: 'op_acc' },
+  });
+  assert.equal(accIntruder.status, 'rejected');
+  assert.equal(accIntruder.code, 'FORBIDDEN');
+
+  // Rollback valido por a1 (proponente)
+  const accRb1 = await ledger.execute({
+    operation_id: 'rb_acc_valid', actor_id: 'a1', capability: 'trade.rollback', expected_versions: {},
+    input: { target_operation_id: 'op_acc' },
+  });
+  assert.equal(accRb1.status, 'applied');
+  assert.equal(ledger.getProposal('pr_acc').status, 'rolled_back');
+
+  // Segundo rollback a trade.accept con op_id distinto
+  const accRb2 = await ledger.execute({
+    operation_id: 'rb_acc_double', actor_id: 'a2', capability: 'trade.rollback', expected_versions: {},
+    input: { target_operation_id: 'op_acc' },
+  });
+  assert.equal(accRb2.status, 'rejected');
+  assert.equal(accRb2.code, 'INVALID_ROLLBACK');
+});
