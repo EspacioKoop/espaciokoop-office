@@ -1,8 +1,6 @@
 # Acceso privado a la oficina común por WireGuard
 
-**Leer primero:** [Guía de entrada para Eloy y sus agentes](office-first-connection.md).
-
-**Estado:** D5 fue [aceptada por Eloy](https://github.com/EspacioKoop/espaciokoop-office/issues/1#issuecomment-5870101367), que declaró WireGuard instalado y su clave pública entregada por privado. Esta guía no acredita handshake desde su red, login ni presencia bilateral. La configuración real se intercambia fuera del repositorio; no regenerar su pareja de claves si ya existe. Seguimiento actual en [#17](https://github.com/EspacioKoop/espaciokoop-office/issues/17); #26 conserva la preparación histórica.
+**Estado:** propuesta **D5** ([#1](https://github.com/EspacioKoop/espaciokoop-office/issues/1#issuecomment-5868570693)), **pendiente de que Eloy la acepte**. Esta guía no abre ningún acceso: explica cómo se haría. La configuración real se hace fuera del repositorio, cuando los dos den el OK. Seguimiento en #26.
 
 ## Qué es y qué no es
 
@@ -12,7 +10,7 @@
   1. **WireGuard** decide quién llega a la oficina.
   2. **La clave de miembro de la oficina** decide quién es cada uno dentro.
 - Sin dominio, sin página pública y sin coste. Del lado de Varo solo queda accesible el puerto de WireGuard, que no responde a quien no tenga una clave autorizada.
-- El servicio común (#21) está integrado mediante #25. Código integrado, despliegue y acceso bilateral son comprobaciones distintas; consulta la guía de entrada para el recorrido operativo.
+- Requiere el servicio común (#21), todavía no integrado.
 
 ## Qué nunca va al repositorio
 
@@ -21,7 +19,7 @@ Claves privadas o públicas, direcciones, puertos, puntos de conexión, nombres 
 ## Pasos de Eloy
 
 1. **Instalar WireGuard.** En Windows y macOS, la aplicación oficial de [wireguard.com/install](https://www.wireguard.com/install/). En Linux, el paquete `wireguard-tools` de su distribución.
-2. **Solo si aún no tiene una pareja válida**, generarla en su propio equipo. Eloy ya declaró una existente: reutilizarla según la configuración acordada, sin sobrescribirla. La clave privada **no sale nunca de su equipo**.
+2. **Generar su pareja de claves en su propio equipo.** La clave privada **no sale nunca de su equipo**.
    - Windows o macOS: en la aplicación, *Añadir túnel → Añadir túnel vacío*. La aplicación crea la pareja y muestra la clave pública.
    - Linux:
      ```sh
@@ -62,7 +60,7 @@ Claves privadas o públicas, direcciones, puertos, puntos de conexión, nombres 
 
 ## Prueba conjunta de aceptación
 
-Se hace con los dos presentes y dentro del alcance acordado, especialmente al revocar accesos. En #17 se anotan solo el resultado saneado y la fecha; #26 conserva el historial.
+Se hace una vez con los dos presentes. En #26 se anotan solo el resultado y la fecha.
 
 - [ ] Eloy, desde su red, ve la pantalla de entrada y entra con su clave.
 - [ ] Desde el túnel no responde ningún otro puerto ni equipo del lado de Varo.
