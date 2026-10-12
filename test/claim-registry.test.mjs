@@ -156,3 +156,50 @@ test('límite: más de 5000 eventos se rechaza en vez de procesar sin cota', () 
   const many = Array.from({ length: 5001 }, (_, i) => claimEvent({ id: i + 1, at: iso(i), branch: `agent/18-x${i}`, files: [`f${i}.md`] }));
   assert.throws(() => buildClaimRegistry(many), err => err.code === 'CLAIM_REGISTRY');
 });
+
+test('seguridad: un agente no puede liberar una reserva de otro agente', () => {
+  const registry = buildClaimRegistry([
+    claimEvent(),
+    releaseEvent({ id: 4, agent: 'INTRUSO', at: iso(2) }),
+  ]);
+  assert.equal(registry.active.length, 1);
+  assert.equal(registry.released.length, 0);
+  assert.equal(registry.rejected.length, 1);
+  assert.equal(registry.rejected[0].kind, 'ORPHAN_RELEASE');
+});
+
+test('seguridad: PR_READY y RELEASE del issue equivocado no afectan la reserva', () => {
+  const registry = buildClaimRegistry([
+    claimEvent(),
+    prReadyEvent({ id: 4, issue: 123 }),
+    releaseEvent({ id: 5, issue: 123 }),
+  ]);
+  assert.equal(registry.active.length, 1);
+  assert.equal(registry.active[0].prReady, false);
+  assert.equal(registry.released.length, 0);
+  assert.deepEqual(registry.rejected.map(x => x.kind), ['ORPHAN_PR_READY', 'ORPHAN_RELEASE']);
+});
+
+test('seguridad: CLAIM con igual rama y agente no puede cambiar de issue', () => {
+  const registry = buildClaimRegistry([
+    claimEvent(),
+    claimEvent({ id: 8, at: iso(1), issue: 999, goal: 'Intento de reasignación.' }),
+  ]);
+  assert.equal(registry.active.length, 1);
+  assert.equal(registry.active[0].issue, 18);
+  assert.equal(registry.conflicts.length, 1);
+  assert.equal(registry.conflicts[0].kind, 'BRANCH_ISSUE_MISMATCH');
+});
+
+test('seguridad: rechaza alias de rutas para evitar reservas duplicadas', () => {
+  for (const path of ['./src/code.mjs', 'src/../src/code.mjs', 'src//code.mjs',
+    '/src/code.mjs', 'src\\\\code.mjs', 'src/code.mjs ', 'src/./code.mjs']) {
+    assert.throws(
+      () => validateClaimEvent(claimEvent({ files: [path] })),
+      err => err.code === 'CLAIM_EVENT',
+      path
+    );
+  }
+  const canonical = validateClaimEvent(claimEvent({ files: ['src/claim-registry.mjs'] }));
+  assert.deepEqual(canonical.files, ['src/claim-registry.mjs']);
+});
