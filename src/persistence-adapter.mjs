@@ -1,5 +1,5 @@
 import { chmod, lstat, mkdir, mkdtemp, open, readdir, readFile, rename, rm, unlink } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { PersistenceError, validateJournal, validateRecipe } from './persistence-types.mjs';
 
@@ -130,7 +130,7 @@ export async function snapshotAll() {
       const record = kind === 'journals'
         ? validateJournal(await readAndParseJson(file))
         : validateRecipe(await readAndParseJson(file));
-      if (`${record.id}.json` !== file.split('/').at(-1)) {
+      if (`${record.id}.json` !== basename(file)) {
         throw new PersistenceError('CORRUPT_FILE', 'ID de documento no coincide con su fichero.');
       }
       (kind === 'journals' ? journals : recipes).push(record);
@@ -177,7 +177,6 @@ export async function restoreSnapshot(snapshot, { replace = false } = {}) {
   await chmod(stage, 0o700);
   const backups = new Map();
   const installed = [];
-  const backupNames = new Map();
   const token = randomUUID();
   let success = false;
   try {
@@ -185,11 +184,13 @@ export async function restoreSnapshot(snapshot, { replace = false } = {}) {
       const dir = join(stage, kind);
       await mkdir(dir, { mode: 0o700 });
       for (const record of records[kind]) {
-        await (await open(join(dir, `${record.id}.json`), 'wx', 0o600))
-          .then(async handle => {
-            try { await handle.writeFile(JSON.stringify(record, null, 2), 'utf8'); await handle.sync(); }
-            finally { await handle.close(); }
-          });
+        const handle = await open(join(dir, `${record.id}.json`), 'wx', 0o600);
+        try {
+          await handle.writeFile(JSON.stringify(record, null, 2), 'utf8');
+          await handle.sync();
+        } finally {
+          await handle.close();
+        }
       }
     }
     for (const kind of ['journals', 'recipes']) {
