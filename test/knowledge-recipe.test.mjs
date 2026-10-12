@@ -135,7 +135,7 @@ test('receta: flujo nominal puramente secuencial requested -> accepted -> delive
   assert.equal(createOp.stage, 'requested');
   assert.equal(createOp.effective_version, 1);
 
-  let state = engine.read('recipe-001');
+  let state = engine.read('recipe-001', { actor_team_id: 'equipo-eloy' });
   assert.equal(state.stage, 'requested');
   assert.equal(state.effective_version, 1);
 
@@ -151,7 +151,7 @@ test('receta: flujo nominal puramente secuencial requested -> accepted -> delive
   assert.equal(acceptOp.stage, 'accepted');
   assert.equal(acceptOp.effective_version, 2);
 
-  state = engine.read('recipe-001');
+  state = engine.read('recipe-001', { actor_team_id: 'equipo-eloy' });
   assert.equal(state.stage, 'accepted');
   assert.equal(state.effective_version, 2);
 
@@ -170,7 +170,7 @@ test('receta: flujo nominal puramente secuencial requested -> accepted -> delive
   assert.equal(deliverOp.stage, 'delivered');
   assert.equal(deliverOp.effective_version, 3);
 
-  state = engine.read('recipe-001');
+  state = engine.read('recipe-001', { actor_team_id: 'equipo-eloy' });
   assert.equal(state.stage, 'delivered');
   assert.equal(state.effective_version, 3);
   assert.ok(state.evidence_hashes.includes(EV_HASH_DELIVERY));
@@ -190,7 +190,7 @@ test('receta: flujo nominal puramente secuencial requested -> accepted -> delive
   assert.equal(reviewOp.stage, 'reviewed');
   assert.equal(reviewOp.effective_version, 4);
 
-  state = engine.read('recipe-001');
+  state = engine.read('recipe-001', { actor_team_id: 'equipo-eloy' });
   assert.equal(state.stage, 'reviewed');
   assert.equal(state.effective_version, 4);
   assert.equal(state.history.length, 4);
@@ -324,7 +324,7 @@ test('receta: revocación, bloqueo de transiciones posteriores y filtros de cons
   }), error => error instanceof OfficeError && error.code === 'REVOKED');
 
   // Consulta por filtros
-  const revokedList = engine.list({ stage: 'revoked' });
+  const revokedList = engine.list({ actor_team_id: 'equipo-eloy', stage: 'revoked' });
   assert.equal(revokedList.length, 1);
   assert.equal(revokedList[0].recipe_id, 'recipe-005');
 });
@@ -361,4 +361,48 @@ test('receta: idempotencia y prevención de conflictos por versión', () => {
     expected_version: 99,
     payload: { explicit_consent: true },
   }), error => error instanceof OfficeError && error.code === 'VERSION_CONFLICT');
+});
+
+test('security: una consulta sin actor autenticado no puede leer ni enumerar recetas', () => {
+  const engine = createKnowledgeRecipeEngine(fakePolicy());
+  engine.execute({
+    operation_id: 'op-create-isolation', actor_team_id: 'equipo-eloy',
+    action: 'create', recipe_id: 'recipe-isolation',
+    expected_version: null,
+    payload: fakeRecipe({ recipe_id: 'recipe-isolation' }),
+  });
+  for (const actor of [undefined, null, 'equipo-externo']) {
+    assert.throws(
+      () => engine.read('recipe-isolation', { actor_team_id: actor }),
+      err => err instanceof OfficeError && err.code === 'FORBIDDEN',
+    );
+    assert.throws(
+      () => engine.list({ actor_team_id: actor }),
+      err => err instanceof OfficeError && err.code === 'FORBIDDEN',
+    );
+  }
+  assert.throws(
+    () => engine.list({ actor_team_id: 'equipo-eloy', team_id: 'equipo-externo' }),
+    err => err instanceof OfficeError && err.code === 'FORBIDDEN',
+  );
+  assert.equal(engine.read('recipe-isolation', { actor_team_id: 'equipo-varo' }).recipe_id, 'recipe-isolation');
+  assert.equal(engine.list({ actor_team_id: 'equipo-varo' }).length, 1);
+});
+
+test('security: un tercer miembro de política no ve recetas ajenas aunque sea miembro', () => {
+  const policy = fakePolicy();
+  policy.members.push({ id: 'equipo-auditor', label: 'Equipo Auditor',
+    githubLogin: 'auditor', keyHash: 'c'.repeat(64) });
+  const engine = createKnowledgeRecipeEngine(policy);
+  engine.execute({
+    operation_id: 'op-create-member', actor_team_id: 'equipo-eloy',
+    action: 'create', recipe_id: 'recipe-member',
+    expected_version: null, payload: fakeRecipe({ recipe_id: 'recipe-member' }),
+  });
+  assert.deepEqual(engine.list({ actor_team_id: 'equipo-auditor' }), []);
+  assert.throws(
+    () => engine.read('recipe-member', { actor_team_id: 'equipo-auditor' }),
+    err => err instanceof OfficeError && err.code === 'FORBIDDEN',
+  );
+  assert.equal(engine.read('recipe-member', { actor_team_id: 'equipo-eloy' }).stage, 'requested');
 });
