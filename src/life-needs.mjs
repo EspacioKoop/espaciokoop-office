@@ -56,6 +56,8 @@ export function validateAvatarId(avatarId) {
 export function createAvatarNeeds(avatarId, initialValues = {}) {
   validateAvatarId(avatarId);
   insist(initialValues && typeof initialValues === 'object' && !Array.isArray(initialValues), 'INVALID_INPUT', 'Valores iniciales no válidos.');
+  insist(Object.keys(initialValues).every(key => NEED_KEYS.includes(key)),
+    'INVALID_INPUT', 'Los valores iniciales no admiten campos adicionales.');
 
   const defaults = { energia: 100, hambre: 0, descanso: 100, moral: 100 };
   const needs = {};
@@ -78,11 +80,14 @@ export function createAvatarNeeds(avatarId, initialValues = {}) {
 export function tickNeeds(state, deltaTicks = 1, customRates = {}) {
   insist(state && typeof state === 'object', 'INVALID_STATE', 'Estado no válido.');
   insist(state.version === NEEDS_SNAPSHOT_VERSION, 'VERSION_MISMATCH', 'Versión de estado no compatible.');
+  const checked = restoreNeedsSnapshot(state);
   insist(Number.isSafeInteger(deltaTicks) && deltaTicks >= 0 && deltaTicks <= 100000, 'INVALID_DELTA_TICKS', 'Delta de ticks no válido.');
   insist(customRates && typeof customRates === 'object' && !Array.isArray(customRates), 'INVALID_RATES', 'Tasas de tick no válidas.');
 
-  if (state.paused || deltaTicks === 0) {
-    return structuredClone(state);
+  insist(checked.tick_count + deltaTicks <= Number.MAX_SAFE_INTEGER,
+    'INVALID_DELTA_TICKS', 'Desbordamiento del contador de ticks.');
+  if (checked.paused || deltaTicks === 0) {
+    return structuredClone(checked);
   }
 
   const rates = { ...DEFAULT_TICK_RATES, ...customRates };
@@ -109,6 +114,7 @@ export function tickNeeds(state, deltaTicks = 1, customRates = {}) {
 export function applyNeedsAction(state, action) {
   insist(state && typeof state === 'object', 'INVALID_STATE', 'Estado no válido.');
   insist(state.version === NEEDS_SNAPSHOT_VERSION, 'VERSION_MISMATCH', 'Versión de estado no compatible.');
+  restoreNeedsSnapshot(state);
   insist(action && typeof action === 'object' && !Array.isArray(action), 'INVALID_ACTION', 'Acción no válida.');
 
   const { type, resource } = action;
@@ -151,6 +157,7 @@ export function applyNeedsAction(state, action) {
 
 export function setNeedsPaused(state, paused) {
   insist(state && typeof state === 'object', 'INVALID_STATE', 'Estado no válido.');
+  restoreNeedsSnapshot(state);
   insist(typeof paused === 'boolean', 'INVALID_PAUSE_VALUE', 'Valor de pausa no válido.');
   return {
     ...structuredClone(state),
