@@ -243,3 +243,18 @@ test('security: no se permite desbordar tick_count ni inyectar campos extra', ()
     err => err instanceof LifeNeedsError && err.code === 'INVALID_DELTA_TICKS');
   assert.equal(tickNeeds(almostFull, 0).tick_count, Number.MAX_SAFE_INTEGER);
 });
+
+test('security: privileged resource keys cannot bypass the guard with case variants', () => {
+  const state = createAvatarNeeds('avatar-1');
+  for (const key of ['PERMISSIONS', 'Budget', 'ToKeN', 'Api_Key', 'REALAGENTID', 'CREDENTIALS']) {
+    assert.throws(() => applyNeedsAction(state, {
+      type: 'alimentarse', resource: { synthetic: true, amount: 10, [key]: 'not-real' },
+    }), err => err instanceof LifeNeedsError && err.code === 'SECURITY_VIOLATION', key);
+  }
+  const inherited = Object.create({ token: 'inherited' });
+  inherited.synthetic = true;
+  inherited.amount = 10;
+  assert.throws(() => applyNeedsAction(state, {
+    type: 'descansar', resource: inherited,
+  }), err => err instanceof LifeNeedsError && err.code === 'SECURITY_VIOLATION');
+});
