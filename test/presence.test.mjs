@@ -81,6 +81,32 @@ test('revocación de agente impide reconexión sin afectar al otro propietario',
     .find(a => a.id === 'marea/bruma').status, 'online');
 });
 
+test('revocación de agente purga todos sus proyectos y no caduca hacia activo', () => {
+  let time = 1000;
+  const registry = createPresenceRegistry({ directory, policy: demoPolicy, now: () => time, onlineFor: 5, ttl: 10 });
+  registry.heartbeat({ agentId: 'aurora/atlas', projectId: 'demo/observatorio', sequence: 1 });
+  registry.heartbeat({ agentId: 'aurora/atlas', projectId: 'demo/archivo', sequence: 1 });
+  registry.heartbeat({ agentId: 'marea/bruma', projectId: 'demo/observatorio', sequence: 1 });
+
+  registry.revokeAgent('aurora/atlas');
+  time = 1004;
+
+  const observatorio = registry.snapshot({ memberId: 'marea', projectId: 'demo/observatorio' });
+  assert.deepEqual(
+    observatorio.find(a => a.id === 'aurora/atlas'),
+    { id: 'aurora/atlas', label: 'Atlas', ownerId: 'aurora', status: 'offline', seenAt: null }
+  );
+  assert.equal(observatorio.find(a => a.id === 'marea/bruma').status, 'online');
+
+  const archivo = registry.snapshot({ memberId: 'aurora', projectId: 'demo/archivo' });
+  assert.deepEqual(
+    archivo.find(a => a.id === 'aurora/atlas'),
+    { id: 'aurora/atlas', label: 'Atlas', ownerId: 'aurora', status: 'offline', seenAt: null }
+  );
+  assert.throws(() => registry.heartbeat({ agentId: 'aurora/atlas', projectId: 'demo/archivo', sequence: 99 }),
+    { code: 'PRESENCE_FORBIDDEN' });
+});
+
 test('revocación de proyecto impide lectura y publicación, conserva otros proyectos', () => {
   const registry = createPresenceRegistry({ directory, policy: demoPolicy });
   registry.revokeProject('demo/observatorio');
