@@ -176,11 +176,10 @@ export function projectTelegramKanbanViewModel(snapshot, options = {}) {
     const taskTeamId = raw.team_id || raw.teamId;
     const projectId = (raw.project_id || raw.projectId || raw.repo || '').toLowerCase();
 
-    if (taskTeamId) {
-      if (taskTeamId !== teamId) continue;
-    } else if (policy) {
-      if (!projectId || !allowedProjects.has(projectId)) continue;
-    }
+    // A team_id tag must never bypass project-level read ACLs.
+    if (policy && (!projectId || !allowedProjects.has(projectId))) continue;
+    if (taskTeamId && taskTeamId !== teamId) continue;
+    if (!taskTeamId && !policy) continue;
 
     const issueNumber = raw.issue || raw.number;
     const taskId = raw.id || (projectId && issueNumber ? `${projectId}#${issueNumber}` : null);
