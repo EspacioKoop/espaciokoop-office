@@ -79,6 +79,23 @@ test('telegram-kanban-view-model: aislamiento ACL por equipo y proyecto autoriza
   assert.equal(auroraView.tasks[0].id, 'EspacioKoop/espaciokoop-office#30');
 });
 
+test('telegram-kanban-view-model: team_id no omite la ACL del proyecto', () => {
+  const snapshot = {
+    tasks: [
+      { id: 'privado#1', project_id: 'EspacioKoop/otro-privado',
+        team_id: 'marea', issue: 1, title: 'No autorizado', stage: 'requested' },
+      { id: 'publico#2', project_id: 'EspacioKoop/espaciokoop-office',
+        team_id: 'marea', issue: 2, title: 'Autorizado', stage: 'requested' },
+    ],
+  };
+  const view = projectTelegramKanbanViewModel(snapshot, {
+    authorized: true, agentIdentity: 'marea/bot', policy: mockPolicy,
+  });
+  assert.equal(view.status, 'available');
+  assert.equal(view.totalTasks, 1);
+  assert.equal(view.tasks[0].title, 'Autorizado');
+});
+
 test('telegram-kanban-view-model: redacción de datos privados (tokens, cookies, rutas internas, URLs no permitidas)', () => {
   const snapshot = [
     {
