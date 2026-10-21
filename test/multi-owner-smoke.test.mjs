@@ -130,5 +130,5 @@ test('smoke bilateral: cola, presencia, revocación, caducidad y reintentos qued
 
   const freshAurora = await login('aurora');
   assert.deepEqual((await queue(freshAurora)).queue.map(task => task.issue), [12]);
-  assert.deepEqual((await presence(freshAurora)).agents.map(agent => [agent.id, agent.status]), [['aurora/worker', 'offline']]);
+  assert.deepEqual((await presence(freshAurora)).agents.map(agent => [agent.id, agent.status]), [['aurora/worker', 'unknown']]);
 });
