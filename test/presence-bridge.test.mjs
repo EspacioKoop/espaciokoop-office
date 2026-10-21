@@ -110,7 +110,7 @@ test('prepare/commit/release: ciclo de presencia completo (altas, bajas y evento
   time = 300000;
   view = bridge.read('aurora', demoPolicy);
   assert.equal(view.agents.find(a => a.id === 'aurora/atlas').status, 'offline');
-  assert.equal(view.agents.find(a => a.id === 'marea/bruma').status, 'unknown');
+  assert.equal(view.agents.find(a => a.id === 'marea/bruma').status, 'offline');
 });
 
 test('prepare/commit: valida datos de publicación y coincidencia de proyecto', () => {
