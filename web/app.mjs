@@ -3,6 +3,8 @@ const labels = { requested: 'Solicitada', accepted: 'Aceptada', delivered: 'Entr
 const chain = ['requested', 'accepted', 'delivered', 'reviewed'];
 let detailId = null;
 let info; let snapshot = null; let teamQueue = null; let presence = null; let view = 'office'; let events; let refreshTimer; let expiryTimer; let refreshing = false; let epoch = 0;
+let disposeScene = () => {};
+let prefer3D = false;
 const node = (tag, text, className) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e; };
 function tell(message = '') { $('notice').textContent = message; }
 function pill(stage) { return node('span', labels[stage] ?? 'No verificable', `pill ${stage}`); }
@@ -15,6 +17,8 @@ async function api(path, data) {
   return result;
 }
 function clearView(message = '') {
+  disposeScene(); disposeScene = () => {};
+  prefer3D = false;
   epoch++; snapshot = null; teamQueue = null; presence = null; clearTimeout(refreshTimer); clearTimeout(expiryTimer);
   if (events) { events.close(); events = null; }
   $('office-view').replaceChildren(); $('board').replaceChildren(); $('detail-content').replaceChildren();
@@ -39,6 +43,7 @@ function taskButton(task) {
   return button;
 }
 function renderOffice() {
+  disposeScene(); disposeScene = () => {};
   const root = $('office-view'); root.replaceChildren();
   const heading = node('div', undefined, 'section-head'); const intro = node('div');
   intro.append(node('span', 'EL LUGAR DONDE LAS IDEAS SE ENCUENTRAN', 'eyebrow'), node('h2', 'Tu campus, con contexto.'), node('p', 'Proyectos compartidos. Responsabilidades claras. Evidencias a un clic.'));
@@ -46,7 +51,32 @@ function renderOffice() {
   const campus = node('div', undefined, 'campus'); const scene = node('section', undefined, 'scene-card');
   const sceneMeta = node('div', undefined, 'scene-meta'); sceneMeta.append(node('h3', 'El espacio común'), node('span', 'Vista ambiental · sin telemetría'));
   const image = node('img'); image.src = '/office.svg'; image.alt = 'Ilustración original de la oficina: talleres, mesa compartida, biblioteca y plantas. No muestra agentes reales.';
-  scene.append(sceneMeta, image, node('div', 'La escena es una representación ambiental. La actividad real se consulta en los proyectos, no se deduce de los personajes.', 'scene-caption'));
+  const stage = node('div', undefined, 'scene-stage'); stage.append(image);
+  const controls = node('div', undefined, 'scene-controls');
+  const toggle = node('button', 'Ver oficina en 3D'); controls.append(toggle);
+  toggle.addEventListener('click', async () => {
+    if (stage.dataset.mode === '3d') {
+      disposeScene(); disposeScene = () => {}; stage.replaceChildren(image);
+      prefer3D = false; stage.dataset.mode = '2d'; controls.replaceChildren(toggle); toggle.textContent = 'Ver oficina en 3D'; return;
+    }
+    toggle.disabled = true;
+    try {
+      const { mountOffice3D } = await import('/office-3d.mjs');
+      if (!stage.isConnected) return;
+      const mounted = mountOffice3D(stage);
+      disposeScene = mounted.dispose; prefer3D = true; stage.dataset.mode = '3d';
+      toggle.textContent = 'Volver a la vista 2D';
+      const left = node('button', 'Girar a la izquierda');
+      const right = node('button', 'Girar a la derecha');
+      left.addEventListener('click', () => mounted.rotate(-1));
+      right.addEventListener('click', () => mounted.rotate(1));
+      controls.append(left, right);
+    } catch {
+      stage.replaceChildren(image); tell('No se puede mostrar la vista 3D en este navegador. La vista 2D sigue disponible.');
+    } finally { toggle.disabled = false; }
+  });
+  if (prefer3D) toggle.click();
+  scene.append(sceneMeta, stage, controls, node('div', 'La escena es ambiental y todavía no permite asignar trabajo. La actividad real se consulta en los proyectos.', 'scene-caption'));
   const teams = node('section', undefined, 'card team-panel'); teams.append(node('h3', 'Equipos incorporados'));
   snapshot.members.forEach((member, index) => {
     const card = node('div', undefined, 'team-card'); const avatar = node('div', member.label.split(' ').at(-1).slice(0, 1), `avatar ${index % 2 ? 'alt' : ''}`); avatar.setAttribute('aria-hidden', 'true');
@@ -180,7 +210,7 @@ async function refresh() {
     // Secuencial: ambas rutas comparten una única lectura activa por sesión.
     const queue = await api('/api/queue');
     if (started !== epoch || document.hidden) return;
-    const agents = info?.version ? await api('/api/presence') : null;
+    const agents = info?.version && info.presenceConfigured !== false ? await api('/api/presence') : null;
     if (started !== epoch || document.hidden) return;
     const expiresAt = Math.min(data.expiresAt, queue.expiresAt, agents?.expiresAt ?? Infinity);
     if (data.memberId !== queue.memberId || !Array.isArray(queue.queue) || (agents && (!Array.isArray(agents.agents) || !agents.agents.length)) ||

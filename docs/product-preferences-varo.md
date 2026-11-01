@@ -19,7 +19,7 @@ Esta síntesis sustituye la descripción inicial que fijaba pixel art/2D, limita
 
 ## Dirección visual
 
-- **No exige pixel art, 2D ni isometría.** Eran ideas iniciales para empezar; 3D y otras estéticas siguen abiertos, sin elegir ninguna.
+- **Dirección confirmada por Varo (29216–29232): oficina 3D tipo Sims**, con alternativa accesible 2D y cooperación asíncrona. Cada propietario opera desde su lado; no es necesario que ambos estén presentes a la vez. La implementación y los permisos de cada propietario siguen sujetos a sus contratos y pruebas.
 - Calidad gráfica y de UI/HUD trabajada, identidad coherente, menús profundos pero legibles y ausencia de aspecto genérico o descuidado.
 - El banner del repositorio es identidad conceptual; no determina el estilo del juego ni muestra una interfaz implementada.
 

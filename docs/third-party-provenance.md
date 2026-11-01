@@ -62,3 +62,11 @@ A fecha de este registro:
 - estudiar una interfaz o patrón no cambia ese estado.
 
 Si en el futuro se copia el primer fichero, esta afirmación deja de ser válida y el mismo PR debe actualizar este registro con la entrada concreta. No se aceptará una atribución genérica del repositorio completo como sustituto de la procedencia por componente.
+
+### Three.js para la escena 3D
+
+Se incorporan únicamente los módulos de distribución `three.module.min.js` y
+`three.core.min.js` de Three.js 0.180.0, publicados en npm como `three@0.180.0`.
+Copyright 2010–2025 Three.js Authors; licencia MIT íntegra en
+[`web/vendor/THREE-LICENSE.txt`](../web/vendor/THREE-LICENSE.txt). La escena y
+su geometría son propias; no se importan modelos ni recursos de otras oficinas.

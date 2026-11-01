@@ -19,6 +19,9 @@ const assets = new Map([
   ['/', ['../web/index.html', 'text/html; charset=utf-8']],
   ['/app.mjs', ['../web/app.mjs', 'text/javascript; charset=utf-8']],
   ['/style.css', ['../web/style.css', 'text/css; charset=utf-8']],
+  ['/office-3d.mjs', ['../web/office-3d.mjs', 'text/javascript; charset=utf-8']],
+  ['/vendor/three.module.min.js', ['../web/vendor/three.module.min.js', 'text/javascript; charset=utf-8']],
+  ['/vendor/three.core.min.js', ['../web/vendor/three.core.min.js', 'text/javascript; charset=utf-8']],
   ['/office.svg', ['../web/office.svg', 'image/svg+xml']]
 ]);
 const security = {
@@ -191,7 +194,7 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
         res.writeHead(200, { ...security, 'Content-Type': type });
         return res.end(readFileSync(new URL(file, import.meta.url)));
       }
-      if (req.method === 'GET' && url.pathname === '/api/info') return json(res, 200, { version: VERSION, mode, ttl: TTL, integration: 'metadata-read-only' });
+      if (req.method === 'GET' && url.pathname === '/api/info') return json(res, 200, { version: VERSION, mode, ttl: TTL, integration: 'metadata-read-only', presenceConfigured: Boolean(presence) });
       if (req.method === 'POST' && url.pathname === '/api/session') {
         if (now() - windowStart >= 60000) { attempts = 0; windowStart = now(); }
         insist(attempts < 20 && sessions.size < 100, 'RATE_LIMIT', 'Demasiados intentos. Reintenta en un minuto.', 429);
