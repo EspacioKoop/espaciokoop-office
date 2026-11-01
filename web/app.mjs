@@ -5,6 +5,7 @@ let detailId = null;
 let info; let snapshot = null; let teamQueue = null; let presence = null; let view = 'office'; let events; let refreshTimer; let expiryTimer; let refreshing = false; let epoch = 0;
 let disposeScene = () => {};
 let prefer3D = false;
+let agency = null; let agencyEpoch = 0; let agencyTimer; let agencyMessage = ''; let agencyLoading = false; let agencyMutating = false;
 const node = (tag, text, className) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e; };
 function tell(message = '') { $('notice').textContent = message; }
 function pill(stage) { return node('span', labels[stage] ?? 'No verificable', `pill ${stage}`); }
@@ -19,6 +20,7 @@ async function api(path, data) {
 function clearView(message = '') {
   disposeScene(); disposeScene = () => {};
   prefer3D = false;
+  agencyEpoch++; agency = null; agencyMessage = ''; agencyLoading = false; agencyMutating = false; clearTimeout(agencyTimer);
   epoch++; snapshot = null; teamQueue = null; presence = null; clearTimeout(refreshTimer); clearTimeout(expiryTimer);
   if (events) { events.close(); events = null; }
   $('office-view').replaceChildren(); $('board').replaceChildren(); $('detail-content').replaceChildren();
@@ -48,6 +50,7 @@ function renderOffice() {
   const heading = node('div', undefined, 'section-head'); const intro = node('div');
   intro.append(node('span', 'EL LUGAR DONDE LAS IDEAS SE ENCUENTRAN', 'eyebrow'), node('h2', 'Tu campus, con contexto.'), node('p', 'Proyectos compartidos. Responsabilidades claras. Evidencias a un clic.'));
   heading.append(intro); root.append(heading);
+  root.append(renderAgency());
   const campus = node('div', undefined, 'campus'); const scene = node('section', undefined, 'scene-card');
   const sceneMeta = node('div', undefined, 'scene-meta'); sceneMeta.append(node('h3', 'El espacio común'), node('span', 'Vista ambiental · sin telemetría'));
   const image = node('img'); image.src = '/office.svg'; image.alt = 'Ilustración original de la oficina: talleres, mesa compartida, biblioteca y plantas. No muestra agentes reales.';
@@ -222,6 +225,7 @@ async function refresh() {
     $('refresh').hidden = false; $('logout').hidden = false;
     $('updated').textContent = `Verificado a las ${new Date(data.generatedAt).toLocaleTimeString('es-ES')}`;
     renderOffice(); renderBoard(); show(view);
+    if (!agency && !agencyLoading && !agencyTimer) loadAgency();
     if ($('detail').open) {
       const current = visibleTasks().find(t => t.id === detailId);
       if (current) detail(current); else $('detail').close();
@@ -233,6 +237,107 @@ async function refresh() {
     if (!events) watchSession();
   } catch (error) { if (started === epoch) clearView(error.code === 'AUTH' ? '' : error.message); }
   finally { refreshing = false; }
+}
+// La agencia conserva únicamente la proyección autorizada por el servidor.
+async function agencyRequest(path, payload) {
+  const options = { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(11000) };
+  if (payload) Object.assign(options, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+  const response = await fetch(path, options);
+  let body = {}; try { body = await response.json(); } catch { /* respuesta sin JSON */ }
+  if (!response.ok) {
+    const error = new Error(body.error?.message || body.message || 'Servicio de agencia no disponible.');
+    error.status = response.status; throw error;
+  }
+  return { body, status: response.status };
+}
+async function loadAgency() {
+  if (!snapshot || document.hidden || agencyLoading) return;
+  agencyLoading = true; clearTimeout(agencyTimer); agencyTimer = null;
+  const started = agencyEpoch;
+  try {
+    const { body } = await agencyRequest('/api/agency');
+    if (started !== agencyEpoch || !snapshot || document.hidden) return;
+    if (body.version !== 1 || !Array.isArray(body.agents) || !Array.isArray(body.jobs) || !Array.isArray(body.sections)) throw new Error('Respuesta de agencia incompatible.');
+    agency = body;
+  } catch (error) {
+    if (started !== agencyEpoch) return;
+    if (error.status === 401) { clearView('La sesión ha caducado. Vuelve a entrar.'); return; }
+    agencyMessage = error.status === 404 || error.status === 503 ? 'La agencia no está configurada. Contacta con la persona que integra Office.' : `Sin conexión con la agencia: ${error.message}`;
+  } finally {
+    if (started === agencyEpoch) {
+      agencyLoading = false;
+      if (snapshot && !document.hidden) { renderOffice(); agencyTimer = setTimeout(loadAgency, 15000); }
+    }
+  }
+}
+async function agencyAction(path, fields) {
+  if (agencyMutating) return;
+  agencyMutating = true; agencyEpoch++; agencyLoading = false; clearTimeout(agencyTimer); agencyTimer = null;
+  const started = agencyEpoch;
+  try {
+    const result = await agencyRequest(path, { operation_id: crypto.randomUUID(), ...fields });
+    if (started !== agencyEpoch) return;
+    agencyMessage = result.status === 202 ? 'Solicitud recibida; se confirmará cuando aparezca en la agencia.' : 'Operación recibida; actualizando estado.';
+    await loadAgency();
+  } catch (error) {
+    if (started !== agencyEpoch) return;
+    if (error.status === 401) { clearView('La sesión ha caducado. Vuelve a entrar.'); return; }
+    agencyMessage = error.status === 409 ? 'El estado ha cambiado. Se actualizará sin repetir la operación.' : error.message;
+    if (error.status === 409) await loadAgency(); else renderOffice();
+  } finally { if (started === agencyEpoch) agencyMutating = false; }
+}
+function agencyButton(label, handler) { const b = node('button', label); b.type = 'button'; b.addEventListener('click', handler); return b; }
+function agencySelect(items, placeholder) {
+  const select = node('select'); select.setAttribute('aria-label', placeholder);
+  const empty = node('option', placeholder); empty.value = ''; select.append(empty);
+  for (const [value, label] of items) { const option = node('option', label); option.value = value; select.append(option); }
+  return select;
+}
+function renderAgency() {
+  const panel = node('section', undefined, 'card agency-panel');
+  panel.append(node('h3', 'Mis agentes'));
+  if (agencyMessage) panel.append(node('p', agencyMessage, 'hint'));
+  if (!agency) { panel.append(node('p', agencyLoading ? 'Consultando la agencia…' : 'Sin datos de agencia.', 'hint'), agencyButton('Reintentar', loadAgency)); return panel; }
+  panel.append(node('p', `Última observación: ${agency.observed_at || 'no disponible'}`, 'hint'));
+  const own = agency.agents.filter(a => a.owner_id === agency.owner_id);
+  if (!agency.agents.length) panel.append(node('p', 'Aún no hay agentes visibles.', 'empty'));
+  for (const agent of agency.agents) {
+    const card = node('div', undefined, 'agency-agent');
+    card.append(node('strong', agent.name), node('span', ` · ${agent.status} · ${agent.in_office ? 'en la oficina' : 'fuera de la oficina'}`));
+    if (agent.owner_id === agency.owner_id) {
+      card.append(agencyButton(agent.in_office ? 'Retirar' : 'Incorporar', () => agencyAction(`/api/agency/agents/${encodeURIComponent(agent.id)}/membership`, { in_office: !agent.in_office, expected_version: agent.version })));
+      const action = agent.status === 'paused' ? 'resume' : 'pause';
+      card.append(agencyButton(action === 'pause' ? 'Pausar' : 'Reanudar', () => agencyAction(`/api/agency/agents/${encodeURIComponent(agent.id)}/lifecycle`, { action, expected_version: agent.version })), agencyButton('Detener', () => agencyAction(`/api/agency/agents/${encodeURIComponent(agent.id)}/lifecycle`, { action: 'stop', expected_version: agent.version })));
+      if (agency.capabilities?.assign) {
+        const section = agencySelect(agency.sections.map(s => [s.id, s.name]), 'Elegir sección');
+        const job = agencySelect(agency.jobs.map(j => [j.id, j.title]), 'Sin tarea');
+        card.append(section, job, agencyButton('Asignar', () => { if (!section.value && !job.value) { agencyMessage = 'Elige una sección o una tarea.'; renderOffice(); return; } agencyAction(`/api/agency/agents/${encodeURIComponent(agent.id)}/assign`, { section_id: section.value || null, job_id: job.value || null, expected_version: agent.version }); }));
+      }
+    } else card.append(node('span', ' · Compartido, solo lectura', 'hint'));
+    panel.append(card);
+  }
+  const connectors = (agency.connectors || []).filter(c => c.owner_id === agency.owner_id);
+  if (!connectors.length) panel.append(node('p', 'Para crear o conectar agentes, configura primero un conector propio con la persona que integra Office.', 'hint'));
+  else {
+    const connector = agencySelect(connectors.map(c => [c.id, `${c.runtime} · ${c.status}`]), 'Elegir conector');
+    const name = node('input'); name.placeholder = 'Nombre del agente'; name.setAttribute('aria-label', 'Nombre del agente');
+    const role = node('input'); role.placeholder = 'Rol o plantilla'; role.setAttribute('aria-label', 'Rol o plantilla');
+    const ref = node('input'); ref.placeholder = 'Referencia del agente existente'; ref.setAttribute('aria-label', 'Referencia del agente existente');
+    panel.append(connector, name, role, ref);
+    if (agency.capabilities?.create_agent) panel.append(agencyButton('Crear', () => { const c = connectors.find(x => x.id === connector.value); if (c && name.value && role.value) agencyAction('/api/agency/agents', { name: name.value, runtime: c.runtime, connector_id: c.id, template: role.value }); else { agencyMessage = 'Elige conector, nombre y plantilla.'; renderOffice(); } }));
+    if (agency.capabilities?.connect_agent) panel.append(agencyButton('Conectar', () => { if (connector.value && ref.value) agencyAction('/api/agency/agents/connect', { connector_id: connector.value, agent_ref: ref.value }); else { agencyMessage = 'Elige conector e indica la referencia.'; renderOffice(); } }));
+  }
+  const jobs = node('div', undefined, 'agency-jobs'); jobs.append(node('h3', 'Tareas de la agencia'));
+  for (const job of agency.jobs) {
+    const row = node('div'); row.append(node('strong', job.title), node('span', ` · ${job.status}${job.shared ? ' · compartida' : ''}`));
+    row.append(agencyButton('Ver resultado y evidencia', async () => { try { const started = agencyEpoch; const { body } = await agencyRequest(`/api/agency/jobs/${encodeURIComponent(job.id)}`); if (started !== agencyEpoch) return; const result = node('p', JSON.stringify(body)); row.append(result); } catch (error) { if (error.status === 401) clearView('La sesión ha caducado.'); else tell(error.message); } })); jobs.append(row);
+  }
+  if (!agency.jobs.length) jobs.append(node('p', 'No hay tareas visibles.', 'hint'));
+  panel.append(jobs);
+  const learning = node('div'); learning.append(node('h3', 'Aprendizajes'));
+  for (const item of agency.learnings || []) { const row = node('div'); row.append(node('strong', item.title), node('span', ` · ${item.state} · reutilizaciones: ${item.reuse_count}`), node('p', item.content)); if (item.owner_id === agency.owner_id) for (const state of ['validated', 'revoked']) row.append(agencyButton(state === 'validated' ? 'Validar' : 'Revocar', () => agencyAction(`/api/agency/learnings/${encodeURIComponent(item.id)}/state`, { state }))); learning.append(row); }
+  if (!(agency.learnings || []).length) learning.append(node('p', 'No hay aprendizajes visibles.', 'hint'));
+  panel.append(learning); return panel;
 }
 async function login(key) {
   try {
