@@ -11,6 +11,7 @@ import { GitHubSource } from './github.mjs';
 import { DemoSource } from './fixtures.mjs';
 import { createPresenceBridge } from './presence-bridge.mjs';
 import { createSpaceBridge, spaceFailure } from './space-bridge.mjs';
+import { openAgencyConnectors } from './agency-connectors.mjs';
 import { SpaceError, createSpaceState } from '../packages/office-space/src/space.mjs';
 
 export const VERSION = '1.0.0-rc.1';
@@ -130,6 +131,11 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
     createSpaceState(projectId);
     insist(initialPolicy.projects.some(p => p.repo === projectId), 'CONFIG', 'El proyecto de oficina debe existir en la política.');
   }
+  let agency = null;
+  if (config.OFFICE_AGENCY_DIR !== undefined) {
+    try { agency = openAgencyConnectors({ directory: config.OFFICE_AGENCY_DIR, now }); }
+    catch { throw new OfficeError('CONFIG', 'Almacén de agencia no disponible.', 503); }
+  }
   const sessions = new Map(); const streams = new Map(); const busy = new Set();
   let attempts = 0; let windowStart = now(); let activeReads = 0;
   const publicSession = s => ({ memberId: s.memberId, expiresAt: s.expiresAt });
@@ -236,7 +242,29 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
           return json(res, 200, publication.commit(data, policy()));
         } finally { publication.release(); }
       }
+      if (req.method === 'POST' && url.pathname === '/api/agency/connectors/heartbeat') {
+        insist(agency, 'AGENCY_UNAVAILABLE', 'Agencia no disponible.', 503);
+        const token = /^Bearer ([^\s]+)$/.exec(req.headers.authorization ?? '')?.[1];
+        agency.authenticate(token, policy());
+        await body(req, []);
+        const connector = agency.authenticate(token, policy());
+        return json(res, 200, agency.heartbeat(connector));
+      }
       const p = policy(); const { id, session } = getSession(req, p);
+      if (url.pathname.startsWith('/api/agency')) {
+        insist(agency, 'AGENCY_UNAVAILABLE', 'Agencia no disponible.', 503);
+        if (req.method === 'POST' && url.pathname === '/api/agency/connectors') {
+          const data = await body(req, ['operation_id', 'runtime']);
+          getSession(req, policy());
+          return json(res, 201, agency.register(session.memberId, data));
+        }
+        const match = /^\/api\/agency\/connectors\/([a-z0-9-]+)\/revoke$/i.exec(url.pathname);
+        if (req.method === 'POST' && match) {
+          await body(req, []); getSession(req, policy());
+          return json(res, 200, agency.revoke(session.memberId, match[1]));
+        }
+        throw new OfficeError('AGENCY_UNAVAILABLE', 'Esta función de agencia aún no está disponible.', 503);
+      }
       if (req.method === 'GET' && url.pathname === '/api/presence') {
         insist(presence, 'NOT_FOUND', 'Presencia no configurada.', 404);
         const result = presence.read(session.memberId, p);
@@ -325,6 +353,7 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
     server.closeAllConnections();
     await stopped;
     await spaces.close();
+    agency?.close();
   };
   return { server, close, bind: transport.bind };
 }
