@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
+import { DatabaseSync } from 'node:sqlite';
 
 async function portNumber() {
   const s = createServer(); await new Promise(r => s.listen(0, '127.0.0.1', r));
@@ -51,7 +52,7 @@ test('conectores sintéticos por HTTP: aislamiento, reinicio y revocación', asy
     assert.equal((await app.request(`/api/agency/connectors/${id}/revoke`, {}, { cookie: a })).status, 200);
     assert.equal((await app.request('/api/agency/connectors/heartbeat', {}, { authorization: `Bearer ${token}` })).status, 401);
     assert.equal((await app.request('/api/agency/connectors/heartbeat', {}, { authorization: `Bearer ${other.body.token}` })).status, 200);
-    assert.equal((await app.request('/api/agency', undefined, { cookie: a })).status, 503);
+    assert.equal((await app.request('/api/agency', undefined, { cookie: a })).status, 200);
   } finally { await app?.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 test('sin almacén configurado, agencia falla cerrado tras autenticación', async () => {
@@ -60,4 +61,56 @@ test('sin almacén configurado, agencia falla cerrado tras autenticación', asyn
     const a = (await app.request('/api/session', { key: 'demo-aurora' })).cookie;
     assert.equal((await app.request('/api/agency', undefined, { cookie: a })).status, 503);
   } finally { await app.close(); }
+});
+
+test('inventario reportado y movimientos duraderos, aislados por propietario', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'agency-flow-')); let app;
+  try {
+    app = await start(dir);
+    let a = (await app.request('/api/session', { key: 'demo-aurora' })).cookie;
+    let b = (await app.request('/api/session', { key: 'demo-marea' })).cookie;
+    const ca = (await app.request('/api/agency/connectors', {operation_id:'ca',runtime:'hermes'}, {cookie:a})).body;
+    const cb = (await app.request('/api/agency/connectors', {operation_id:'cb',runtime:'claude-code'}, {cookie:b})).body;
+    const auth = {authorization:`Bearer ${ca.token}`};
+    const report = {operation_id:'report1',agents:[{agent_ref:'synthetic',name:'Agente sintético',status:'available',capabilities:['observe']}]};
+    assert.equal((await app.request('/api/agency/connectors/agents',report,auth)).status,200);
+    assert.equal((await app.request('/api/agency/connectors/agents',report,auth)).status,200);
+    assert.equal((await app.request('/api/agency/connectors/agents',{...report,agents:[]},auth)).status,409);
+    assert.equal((await app.request('/api/agency/connectors/agents',{operation_id:'b',agents:[{...report.agents[0],agent_ref:'other'}]}, {authorization:`Bearer ${cb.token}`})).status,200);
+    let snap = (await app.request('/api/agency',undefined,{cookie:a})).body;
+    assert.equal(snap.agents.length,1); assert.equal(snap.connectors.length,1); assert.equal(JSON.stringify(snap).includes(ca.token),false);
+    const agent = snap.agents[0];
+    assert.equal((await app.request('/api/agency/agents', {operation_id:'fake',name:'Fake'}, {cookie:a})).status,503);
+    const sec = (await app.request('/api/agency/sections',{operation_id:'sec',name:'Mesa'}, {cookie:a})).body;
+    assert.deepEqual((await app.request('/api/agency/sections',{operation_id:'sec',name:'Mesa'}, {cookie:a})).body,sec);
+    assert.equal((await app.request('/api/agency/sections',{operation_id:'sec',name:'Otra'}, {cookie:a})).status,409);
+    const membership = {operation_id:'join',in_office:true,expected_version:agent.version};
+    const path = `/api/agency/agents/${agent.id}`;
+    assert.equal((await app.request(`${path}/membership`,membership,{cookie:b})).status,403);
+    assert.equal((await app.request(`${path}/membership`,membership,{cookie:a})).status,200);
+    assert.equal((await app.request(`${path}/membership`,membership,{cookie:a})).status,200);
+    assert.equal((await app.request(`${path}/assign`,{operation_id:'stale',job_id:null,section_id:sec.id,expected_version:agent.version},{cookie:a})).status,409);
+    assert.equal((await app.request(`${path}/assign`,{operation_id:'job',job_id:'x',section_id:sec.id,expected_version:agent.version+1},{cookie:a})).status,501);
+    assert.equal((await app.request(`${path}/assign`,{operation_id:'assign',job_id:null,section_id:sec.id,expected_version:agent.version+1},{cookie:a})).status,200);
+    assert.equal((await app.request('/api/agency/connectors/heartbeat',{},auth)).status,200);
+    assert.equal((await app.request('/api/agency/connectors/agents',{...report,operation_id:'refresh'},auth)).status,200);
+    assert.equal((await app.request('/api/agency',undefined,{cookie:a})).body.agents[0].section_id,sec.id);
+    await app.close(); app=await start(dir);
+    a=(await app.request('/api/session',{key:'demo-aurora'})).cookie;
+    b=(await app.request('/api/session',{key:'demo-marea'})).cookie;
+    snap=(await app.request('/api/agency',undefined,{cookie:a})).body;
+    assert.equal(snap.agents[0].section_id,sec.id); assert.equal(snap.agents[0].in_office,true); assert.equal(snap.capabilities.assign,true);
+    assert.equal((await app.request('/api/agency',undefined,{cookie:b})).body.agents[0].id === agent.id,false);
+    assert.equal((await app.request(`${path}/membership`,{operation_id:'leave',in_office:false,expected_version:snap.agents[0].version},{cookie:a})).status,200);
+    snap=(await app.request('/api/agency',undefined,{cookie:a})).body; assert.equal(snap.agents[0].section_id,null);
+    assert.equal((await app.request(`/api/agency/connectors/${ca.id}/revoke`,{}, {cookie:a})).status,200);
+    assert.equal((await app.request(`/api/agency/connectors/${ca.id}/revoke`,{}, {cookie:a})).status,200);
+    assert.equal((await app.request('/api/agency/connectors/agents',{...report,operation_id:'later'},auth)).status,401);
+    snap=(await app.request('/api/agency',undefined,{cookie:a})).body; assert.equal(snap.agents[0].status,'offline'); assert.equal(snap.capabilities.assign,false);
+    await app.close(); app = null;
+    const db = new DatabaseSync(join(dir,'agency.sqlite')); db.prepare('UPDATE agency_connectors SET last_seen=? WHERE id=?').run(Date.now()-61000,cb.id); db.close();
+    app=await start(dir); b=(await app.request('/api/session',{key:'demo-marea'})).cookie;
+    assert.equal((await app.request('/api/agency/connectors/agents',{operation_id:'expired',agents:[]},{authorization:`Bearer ${cb.token}`})).status,401);
+    assert.equal((await app.request('/api/agency',undefined,{cookie:b})).body.agents[0].status,'offline');
+  } finally { await app?.close(); rmSync(dir,{recursive:true,force:true}); }
 });

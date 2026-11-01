@@ -250,9 +250,29 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
         const connector = agency.authenticate(token, policy());
         return json(res, 200, agency.heartbeat(connector));
       }
+      if (req.method === 'POST' && url.pathname === '/api/agency/connectors/agents') {
+        insist(agency, 'AGENCY_UNAVAILABLE', 'Agencia no disponible.', 503);
+        const token = /^Bearer ([^\s]+)$/.exec(req.headers.authorization ?? '')?.[1];
+        agency.authenticate(token, policy());
+        const data = await body(req, ['operation_id', 'agents']);
+        return json(res, 200, agency.report(agency.authenticate(token, policy()), data));
+      }
       const p = policy(); const { id, session } = getSession(req, p);
       if (url.pathname.startsWith('/api/agency')) {
         insist(agency, 'AGENCY_UNAVAILABLE', 'Agencia no disponible.', 503);
+        if (req.method === 'GET' && url.pathname === '/api/agency') {
+          const result = agency.snapshot(session.memberId); getSession(req, policy());
+          return json(res, 200, result);
+        }
+        if (req.method === 'POST' && url.pathname === '/api/agency/sections') {
+          const data = await body(req, ['operation_id', 'name']); getSession(req, policy());
+          return json(res, 201, agency.section(session.memberId, data));
+        }
+        const movement = /^\/api\/agency\/agents\/([a-z0-9-]+)\/(membership|assign)$/i.exec(url.pathname);
+        if (req.method === 'POST' && movement) {
+          const data = await body(req, movement[2] === 'membership' ? ['operation_id','in_office','expected_version'] : ['operation_id','job_id','section_id','expected_version']);
+          getSession(req, policy()); return json(res, 200, agency.move(session.memberId, movement[1], data, movement[2]));
+        }
         if (req.method === 'POST' && url.pathname === '/api/agency/connectors') {
           const data = await body(req, ['operation_id', 'runtime']);
           getSession(req, policy());
