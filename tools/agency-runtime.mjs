@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { loadRuntimeConfig, runAgency, runtimeArgv } from '../src/agency-runtime.mjs';
 
 function execute(c, instruction, onTick, signal) {
   return new Promise(resolve => {
     if (process.platform === 'win32') { resolve({ code:null, output:'', reason:'platform' }); return; }
     const env = { HOME:c.profile.home, LANG:'C.UTF-8', PATH:'/usr/bin:/bin', ...(c.provider_env ?? {}) };
+    if (c.runtime === 'hermes') {
+      env.HERMES_HOME = join(c.profile.home, 'hermes');
+      mkdirSync(env.HERMES_HOME, { mode:0o700, recursive:true });
+    }
     let child;
     try { child = spawn(c.executable, runtimeArgv(c), { cwd:c.workspace, env, stdio:['pipe','pipe','pipe'], shell:false, detached:true }); }
     catch { resolve({ code:null, output:'', reason:'spawn' }); return; }

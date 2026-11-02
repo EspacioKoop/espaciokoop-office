@@ -112,7 +112,9 @@ test('config privado, enlace y allowlist; argv literal sin shell', () => {
   try {
     const c=f.makeConfig('http://127.0.0.1:1234','a'.repeat(64));
     assert.deepEqual(runtimeArgv(loadRuntimeConfig(f.configPath)),['--bare','--strict-mcp-config','--no-session-persistence','--model','fixture-model','-p']);
-    f.makeConfig(c.origin,c.connector_token,{runtime:'hermes',provider:'openai-codex'}); assert.throws(()=>loadRuntimeConfig(f.configPath), /Hermes no disponible/);
+    f.makeConfig(c.origin,c.connector_token,{runtime:'hermes',provider:'openai-codex'});
+    assert.deepEqual(runtimeArgv(loadRuntimeConfig(f.configPath)),[resolve('tools/hermes-office-local.py'),'--model','fixture-model']);
+    f.makeConfig(c.origin,c.connector_token,{runtime:'hermes',provider:'anthropic'}); assert.throws(()=>loadRuntimeConfig(f.configPath));
     f.makeConfig(c.origin,c.connector_token);
     chmodSync(f.configPath,0o644); assert.throws(()=>loadRuntimeConfig(f.configPath));
     chmodSync(f.configPath,0o600);
@@ -216,18 +218,30 @@ test('grupo propio: timeout, revocación y SIGTERM eliminan hijo y nieto', async
   }
 });
 
-test('Hermes falla antes de anunciar disponibilidad o reclamar', async () => {
+test('HTTP → SQLite → proceso Hermes fixture → resultado, sin inferencia', async () => {
   const f=setup(); let app;
   try {
     app=await start(f.dbdir); const a=await owner(app,'demo-aurora'); const agent=await enlist(app,a.cookie,a.connector.token);
     const id=(await app.request('/api/agency/jobs',{operation_id:'hermes-block',title:'Bloqueado',instruction:'prueba',agent_id:agent},{cookie:a.cookie})).body.id;
     f.makeConfig(app.origin,a.connector.token,{runtime:'hermes',provider:'openai-codex'});
     const done=await execRunner(f.configPath).done;
-    assert.equal(done.code,1); assert.match(done.stderr,/Hermes no disponible/);
-    assert.equal(existsSync(join(f.repo,'count')),false);
+    assert.equal(done.code,0,done.stderr);
+    assert.equal(readFileSync(join(f.repo,'count'),'utf8'),'1');
     const db=new DatabaseSync(join(f.dbdir,'agency.sqlite'));
-    assert.equal(db.prepare('SELECT state FROM work WHERE id=?').get(id).state,'queued'); db.close();
+    assert.equal(db.prepare('SELECT state FROM work WHERE id=?').get(id).state,'succeeded'); db.close();
+    const result=(await app.request(`/api/agency/jobs/${id}`,undefined,{cookie:a.cookie})).body;
+    assert.equal(readFileSync(join(f.out,`${result.result.artifact_id}.txt`),'utf8'),'fixture-process:prueba');
   } finally { await app?.close(); f.cleanup(); }
+});
+
+test('wrapper llama a la API local con proveedor explícito y sin gateway', () => {
+  const f=setup();
+  try {
+    const harness = `import sys,types,runpy,socket\nsocket.socket.connect=lambda *a: (_ for _ in ()).throw(AssertionError('red prohibida'))\np=types.ModuleType('hermes_cli'); p.__path__=[]; sys.modules['hermes_cli']=p\nr=types.ModuleType('hermes_cli.runtime_provider')\ndef resolve_runtime_provider(**k):\n assert k=={'requested':'openai-codex','target_model':'fixture-model'}\n return {'provider':'openai-codex','api_mode':'codex_responses','api_key':'fixture','base_url':'https://invalid'}\nr.resolve_runtime_provider=resolve_runtime_provider; sys.modules[r.__name__]=r\nm=types.ModuleType('run_agent')\nclass Agent:\n def __init__(self,**k):\n  assert k['enabled_toolsets']==[] and k['skip_memory'] and k['skip_context_files'] and k['fallback_model'] is None\n  self.provider=k['provider']; self.api_mode=k['api_mode']; self._fallback_chain=[]\n def run_conversation(self, text):\n  assert text=='entrada literal'\n  return {'completed':True,'provider':'openai-codex','model':'fixture-model','final_response':'respuesta fixture'}\nm.AIAgent=Agent; sys.modules['run_agent']=m\nsys.argv=['wrapper','--model','fixture-model']\nrunpy.run_path(${JSON.stringify(resolve('tools/hermes-office-local.py'))},run_name='__main__')`;
+    const home=join(f.out,'profile');
+    const result=spawnSync('/usr/bin/python3',['-c',harness],{input:'entrada literal',encoding:'utf8',env:{HOME:home,HERMES_HOME:join(home,'hermes'),PATH:'/usr/bin:/bin'}});
+    assert.equal(result.status,0,result.stderr); assert.equal(result.stdout,'respuesta fixture');
+  } finally { f.cleanup(); }
 });
 
 

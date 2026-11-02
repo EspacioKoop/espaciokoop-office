@@ -1,8 +1,9 @@
 // Outbound, opt-in executor. Office owns the queue; this process owns only its child.
 import { randomUUID } from 'node:crypto';
-import { closeSync, existsSync, fsyncSync, lstatSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
+import { closeSync, existsSync, fsyncSync, lstatSync, openSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
 import { isIP } from 'node:net';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const id = x => typeof x === 'string' && /^[a-z0-9][a-z0-9._:-]{0,95}$/i.test(x);
 const fail = message => { throw new Error(message); };
@@ -41,9 +42,9 @@ export function loadRuntimeConfig(path, verifyWorkspace = () => true) {
   const lan = isIP(host) === 4 && (/^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host));
   if (!['http:','https:'].includes(url.protocol) || c.origin !== url.origin || url.username || url.password || !(loopback || lan) || (lan && url.protocol !== 'https:')) fail('Origen no autorizado.');
   if (!/^[a-f0-9]{64}$/.test(c.connector_token ?? '') || !['hermes','claude-code'].includes(c.runtime) || !id(c.agent_ref) || typeof c.name !== 'string' || !c.name.trim() || c.name.length > 100 || /[\x00-\x1f\x7f]/.test(c.name)) fail('Identidad no válida.');
-  if (!['openai-codex','anthropic'].includes(c.provider) || (c.runtime === 'claude-code' && c.provider !== 'anthropic') || typeof c.model !== 'string' || !/^[a-z0-9][a-z0-9._:/-]{0,100}$/i.test(c.model)) fail('Proveedor o modelo no aprobados.');
+  if ((c.runtime === 'hermes' ? c.provider !== 'openai-codex' : c.provider !== 'anthropic') || typeof c.model !== 'string' || !/^[a-z0-9][a-z0-9._:/-]{0,100}$/i.test(c.model)) fail('Proveedor o modelo no aprobados.');
   if (!absolute(c.executable) || !Array.isArray(c.executable_allowlist) || !c.executable_allowlist.includes(c.executable) || c.executable_allowlist.some(x => !absolute(x))) fail('Ejecutable fuera de la lista aprobada.');
-  try { noLinks(c.executable); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  try { noLinks(dirname(c.executable)); if (c.runtime === 'hermes') noLinks(realpathSync(c.executable)); else noLinks(c.executable); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (!absolute(c.workspace) || !absolute(c.output_dir) || c.output_dir === c.workspace || c.output_dir.startsWith(c.workspace + '/')) fail('Rutas no válidas.');
   if (path === c.workspace || path.startsWith(c.workspace + '/')) fail('Config dentro del repositorio.');
   noLinks(c.workspace); noLinks(c.output_dir);
@@ -54,14 +55,18 @@ export function loadRuntimeConfig(path, verifyWorkspace = () => true) {
   if (!c.profile || c.profile.scope !== 'project' || c.profile.approved !== true || !id(c.profile.name) || c.profile.name === 'zeratul' || c.profile.name === 'default' || c.profile.home !== join(c.output_dir, 'profile')) fail('Se requiere perfil de proyecto aprobado.');
   noLinks(c.profile.home);
   privateDirectory(c.profile.home);
-  if (c.runtime === 'hermes') fail('Hermes no disponible: su CLI puede delegar en una pasarela fuera del grupo y la cancelación no está garantizada.');
+  if (c.runtime === 'hermes' && c.provider_env !== undefined) fail('Hermes requiere autenticación propia del perfil de proyecto.');
+  if (c.runtime === 'hermes' && existsSync(join(c.profile.home, 'hermes'))) {
+    const hermesHome = join(c.profile.home, 'hermes'); noLinks(hermesHome); privateDirectory(hermesHome);
+    for (const name of ['config.yaml', '.env', 'hooks', 'plugins', 'mcp.json']) if (existsSync(join(hermesHome, name))) fail('Hermes requiere un perfil de proyecto sin configuración, hooks ni MCP.');
+  }
   if (!Number.isSafeInteger(c.timeout_seconds) || c.timeout_seconds < 1 || c.timeout_seconds > 1800) fail('Timeout no válido.');
   if (c.provider_env !== undefined && (!c.provider_env || typeof c.provider_env !== 'object' || Array.isArray(c.provider_env) || Object.entries(c.provider_env).some(([k,v]) => !['ANTHROPIC_API_KEY','OPENAI_API_KEY'].includes(k) || (k === 'ANTHROPIC_API_KEY' && c.provider !== 'anthropic') || (k === 'OPENAI_API_KEY' && c.provider !== 'openai-codex') || typeof v !== 'string' || !v))) fail('Entorno de proveedor no válido.');
   return c;
 }
 
 export function runtimeArgv(c) {
-  if (c.runtime === 'hermes') fail('Hermes no disponible: cancelación de pasarela no garantizada.');
+  if (c.runtime === 'hermes') return [fileURLToPath(new URL('../tools/hermes-office-local.py', import.meta.url)), '--model', c.model];
   return ['--bare', '--strict-mcp-config', '--no-session-persistence', '--model', c.model, '-p'];
 }
 
@@ -115,13 +120,12 @@ const result = (c, j) => post(c, `/api/agency/connectors/jobs/${j.id}/result`, {
 
 function available(c) {
   try {
-    const st = lstatSync(c.executable);
-    return st.isFile() && !st.isSymbolicLink() && (st.mode & 0o111) !== 0;
+    const st = c.runtime === 'hermes' ? statSync(c.executable) : lstatSync(c.executable);
+    return st.isFile() && (st.mode & 0o111) !== 0;
   } catch { return false; }
 }
 
 export async function runAgency(c, { once = true, maxSeconds = 1800, execute, signal } = {}) {
-  if (c.runtime === 'hermes') fail('Hermes no disponible: cancelación de pasarela no garantizada.');
   if (typeof execute !== 'function') fail('Ejecutor local no configurado.');
   const unlock = lockRunner(c);
   const journal = openJournal(c);
