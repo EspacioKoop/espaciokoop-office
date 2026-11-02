@@ -155,10 +155,48 @@ test('trabajos HTTP durables: idempotencia, leases, aislamiento y resultado', as
     assert.equal(JSON.stringify(result).includes(lease),false); assert.equal(JSON.stringify(result).includes(job.instruction),false);
     assert.equal((await app.request('/api/agency/connectors/jobs/claim',{operation_id:'claim'},auth)).body.job,null);
     await app.close(); app=await start(dir); a=(await app.request('/api/session',{key:'demo-aurora'})).cookie;
+    b=(await app.request('/api/session',{key:'demo-marea'})).cookie;
     assert.deepEqual((await app.request(`/api/agency/jobs/${id}`,undefined,{cookie:a})).body,result);
+    assert.equal((await app.request('/api/agency',undefined,{cookie:b})).body.jobs.length,0);
+    assert.equal(JSON.stringify((await app.request('/api/agency',undefined,{cookie:a})).body.jobs).includes(lease),false);
+    const replay=(await app.request('/api/agency/jobs',job,{cookie:a}));
+    assert.equal(replay.status,201); assert.equal(replay.body.id,id);
     assert.equal((await app.request(`/api/agency/connectors/${ca.id}/revoke`,{}, {cookie:a})).status,200);
     assert.equal((await app.request('/api/agency/connectors/jobs/claim',{operation_id:'revoked'},auth)).status,401);
     assert.equal((await app.request(`/api/agency/connectors/jobs/${id}/result`,{lease,state:'failed',summary:'no',artifact_id:'fixture'},auth)).status,401);
+  } finally { await app?.close(); rmSync(dir,{recursive:true,force:true}); }
+});
+
+test('claim concurrente no duplica, agente ocupado no simula y fallo se persiste', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'agency-race-')); let app;
+  try {
+    app = await start(dir);
+    const cookie = (await app.request('/api/session', {key:'demo-aurora'})).cookie;
+    const connector = (await app.request('/api/agency/connectors', {operation_id:'c',runtime:'hermes'}, {cookie})).body;
+    const auth = {authorization:`Bearer ${connector.token}`};
+    const report = {operation_id:'r',agents:[{agent_ref:'a',name:'Agente',status:'available',capabilities:[]}]};
+    assert.equal((await app.request('/api/agency/connectors/agents',report,auth)).status,200);
+    const agent = (await app.request('/api/agency',undefined,{cookie})).body.agents[0];
+    assert.equal((await app.request(`/api/agency/agents/${agent.id}/membership`,{operation_id:'join',in_office:true,expected_version:agent.version},{cookie})).status,200);
+    const create = op => app.request('/api/agency/jobs',{operation_id:op,title:op,instruction:'instrucción sintética',agent_id:agent.id},{cookie});
+    const first = (await create('first')).body.id;
+    const second = (await create('second')).body.id;
+    const races = await Promise.all(['race-a','race-b'].map(operation_id => app.request('/api/agency/connectors/jobs/claim',{operation_id},auth)));
+    assert.ok(races.every(x => x.status === 200));
+    const claimed = races.map(x => x.body.job).filter(Boolean);
+    assert.equal(claimed.length,1); assert.equal(claimed[0].id,first);
+    assert.equal((await app.request('/api/agency/connectors/jobs/claim',{operation_id:'race-c'},auth)).body.job,null);
+    assert.equal((await app.request(`/api/agency/connectors/jobs/${first}/result`,{lease:claimed[0].lease,state:'failed',summary:'Fallo sintético',artifact_id:'fixture'},auth)).status,200);
+    const next = (await app.request('/api/agency/connectors/jobs/claim',{operation_id:'race-d'},auth)).body.job;
+    assert.equal(next.id,second);
+    assert.equal((await app.request(`/api/agency/connectors/jobs/${second}/result`,{lease:next.lease,state:'succeeded',summary:'Hecho',artifact_id:'fixture'},auth)).status,200);
+    assert.equal((await app.request('/api/agency/connectors/agents',{operation_id:'busy',agents:[{...report.agents[0],status:'busy'}]},auth)).status,200);
+    assert.equal((await create('busy-job')).status,409);
+    const snapshot = (await app.request('/api/agency',undefined,{cookie})).body;
+    assert.deepEqual(snapshot.jobs.map(j => [j.title,j.status]),[['first','failed'],['second','succeeded']]);
+    const visible = JSON.stringify(snapshot.jobs);
+    assert.equal(visible.includes(claimed[0].lease),false); assert.equal(visible.includes(next.lease),false);
+    assert.equal(visible.includes('instrucción sintética'),false);
   } finally { await app?.close(); rmSync(dir,{recursive:true,force:true}); }
 });
 

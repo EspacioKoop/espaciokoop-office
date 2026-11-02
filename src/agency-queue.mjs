@@ -67,7 +67,7 @@ export function openAgencyQueue({ directory, now = Date.now }) {
         return prior && prior.state === 'running' ? { id: prior.id, agent_id: prior.agent, title: prior.title, instruction: prior.instruction, lease: prior.lease, lease_until: prior.lease_until } : null;
       }
       const hasAgents = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='agency_agents'").get();
-      const row = hasAgents ? db.prepare("SELECT w.* FROM work w WHERE w.owner=? AND w.connector=? AND w.state='queued' AND (w.agent IS NULL OR EXISTS (SELECT 1 FROM agency_agents a JOIN agency_connectors c ON c.id=a.connector WHERE a.id=w.agent AND a.owner=w.owner AND a.connector=w.connector AND a.in_office=1 AND a.revoked=0 AND a.status='available' AND a.last_seen>? AND c.revoked=0 AND c.last_seen>?)) AND NOT EXISTS (SELECT 1 FROM work active WHERE active.owner=w.owner AND active.agent=w.agent AND active.state='running') ORDER BY w.created_at,w.id LIMIT 1").get(owner, connector, time-60000, time-60000) : db.prepare("SELECT * FROM work WHERE owner=? AND connector=? AND state='queued' ORDER BY created_at,id LIMIT 1").get(owner, connector);
+      const row = hasAgents ? db.prepare("SELECT w.* FROM work w WHERE w.owner=? AND w.connector=? AND w.state='queued' AND (w.agent IS NULL OR EXISTS (SELECT 1 FROM agency_agents a JOIN agency_connectors c ON c.id=a.connector WHERE a.id=w.agent AND a.owner=w.owner AND a.connector=w.connector AND a.in_office=1 AND a.revoked=0 AND a.status='available' AND a.last_seen>? AND c.revoked=0 AND c.last_seen>?)) AND NOT EXISTS (SELECT 1 FROM work active WHERE active.owner=w.owner AND active.agent=w.agent AND active.state='running') ORDER BY w.rowid LIMIT 1").get(owner, connector, time-60000, time-60000) : db.prepare("SELECT * FROM work WHERE owner=? AND connector=? AND state='queued' ORDER BY rowid LIMIT 1").get(owner, connector);
       if (operation) db.prepare('INSERT INTO agency_claims VALUES (?,?,?)').run(connector, operation, row?.id ?? null);
       if (!row) return null;
       const lease = randomUUID();
@@ -110,7 +110,7 @@ export function openAgencyQueue({ directory, now = Date.now }) {
   }
   function list(owner) {
     insist(identifier(owner), 'FIELDS', 'Propietario no válido.');
-    return transaction(() => { expire(now()); return db.prepare('SELECT id,title,state,agent,result FROM work WHERE owner=? ORDER BY created_at,id').all(owner).map(row => ({ id:row.id, title:row.title, status:row.state, agent_id:row.agent, result:row.result ? JSON.parse(row.result) : null })); });
+    return transaction(() => { expire(now()); return db.prepare('SELECT id,title,state,agent,result FROM work WHERE owner=? ORDER BY rowid').all(owner).map(row => ({ id:row.id, title:row.title, status:row.state, agent_id:row.agent, result:row.result ? JSON.parse(row.result) : null })); });
   }
   return { enqueue, claim, heartbeat, finish, read, list, close: () => db.close() };
 }
