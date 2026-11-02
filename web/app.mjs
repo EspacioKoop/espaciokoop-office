@@ -262,7 +262,7 @@ async function loadAgency() {
     const { body } = await agencyRequest('/api/agency');
     if (started !== agencyEpoch || !snapshot || document.hidden) return;
     if (body.version !== 1 || !Array.isArray(body.agents) || !Array.isArray(body.jobs) || !Array.isArray(body.sections)) throw new Error('Respuesta de agencia incompatible.');
-    agency = body;
+    agency = { ...body, agents: body.agents.filter(a => a.owner_id === body.owner_id) };
     if (selectedAgent && !agency.agents.some(a => a.id === selectedAgent)) selectedAgent = null;
   } catch (error) {
     if (started !== agencyEpoch) return;
@@ -302,7 +302,7 @@ function agencySelect(items, placeholder) {
 }
 function assignAgent(id, sectionId) {
   const agent = agency?.agents.find(a => a.id === id);
-  if (!agent || agent.owner_id !== agency.owner_id || !agent.in_office || agent.status !== 'online' || !agency.capabilities?.assign || !agency.sections.some(s => s.id === sectionId) || agencyMutating) return;
+  if (!agent || agent.owner_id !== agency.owner_id || !agent.in_office || agent.status !== 'available' || !agency.capabilities?.assign || !agency.sections.some(s => s.id === sectionId) || agencyMutating) return;
   agencyAction(`/api/agency/agents/${encodeURIComponent(id)}/assign`, { job_id: null, section_id: sectionId, expected_version: agent.version });
 }
 function renderAgency() {
@@ -330,7 +330,7 @@ function renderAgency() {
   if (!agency.agents.length) panel.append(node('p', 'Aún no hay agentes visibles.', 'empty'));
   for (const agent of agency.agents) {
     const own = agent.owner_id === agency.owner_id;
-    const eligible = own && agent.in_office && agent.status === 'online' && agency.capabilities?.assign && !agencyMutating;
+    const eligible = own && agent.in_office && agent.status === 'available' && agency.capabilities?.assign && !agencyMutating;
     const card = node('div', undefined, 'agency-agent'); card.dataset.agentId = agent.id;
     const avatar = agencyButton((agent.name || '?').slice(0, 1).toLocaleUpperCase('es'), () => { selectedAgent = agent.id; renderOffice(); });
     avatar.className = 'avatar agency-avatar'; avatar.setAttribute('aria-label', `Seleccionar ${agent.name}`); avatar.setAttribute('aria-pressed', String(selectedAgent === agent.id)); avatar.draggable = Boolean(eligible);

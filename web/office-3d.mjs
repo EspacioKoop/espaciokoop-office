@@ -45,12 +45,13 @@ export function mountOffice3D(container, agency, actions = {}) {
     const target = box(p.x, 0.06, p.z, Math.min(10 / columns, 2), 0.06, Math.min(6 / rows, 1.5), 0x629d85);
     target.userData.sectionId = section.id; targets.push(target);
   });
-  const agents = agency?.agents.filter(a => a.in_office) || [];
+  const agents = agency?.agents.filter(a => a.in_office && a.owner_id === agency.owner_id) || [];
+  const statusColors = { available: 0xb2e0c7, busy: 0xe5c293, offline: 0x87949c, unknown: 0x67727a };
   agents.forEach((agent, index) => {
     const sectionIndex = sections.findIndex(s => s.id === agent.section_id);
     const p = sectionIndex < 0 ? { x: -5.5 + (index % 12), z: 3.7 } : position(sectionIndex);
     const offset = agents.slice(0, index).filter(a => a.section_id === agent.section_id).length;
-    const person = box(p.x + (offset % 3 - 1) * 0.35, 0.5, p.z + Math.floor(offset / 3) * 0.3, 0.24, 0.8, 0.24, agent.status === 'online' ? 0xb2e0c7 : 0x87949c);
+    const person = box(p.x + (offset % 3 - 1) * 0.35, 0.5, p.z + Math.floor(offset / 3) * 0.3, 0.24, 0.8, 0.24, statusColors[agent.status] ?? statusColors.unknown);
     person.userData.agentId = agent.id; people.push(person);
   });
   const raycaster = new THREE.Raycaster(); const pointer = new THREE.Vector2(); let dragged = null;
@@ -68,7 +69,8 @@ export function mountOffice3D(container, agency, actions = {}) {
     else actions.select?.(dragged);
     dragged = null;
   }
-  renderer.domElement.addEventListener('pointerdown', down); renderer.domElement.addEventListener('pointerup', up);
+  function cancel() { dragged = null; }
+  renderer.domElement.addEventListener('pointerdown', down); renderer.domElement.addEventListener('pointerup', up); renderer.domElement.addEventListener('pointercancel', cancel);
   let angle = Math.PI / 4;
   function draw() {
     if (!container.isConnected) return;
@@ -83,6 +85,6 @@ export function mountOffice3D(container, agency, actions = {}) {
   const observer = new ResizeObserver(draw); observer.observe(container); draw();
   return {
     rotate(direction) { angle += direction * Math.PI / 4; draw(); },
-    dispose() { renderer.domElement.removeEventListener('pointerdown', down); renderer.domElement.removeEventListener('pointerup', up); observer.disconnect(); geometries.forEach(item => item.dispose()); materials.forEach(item => item.dispose()); renderer.dispose(); renderer.domElement.remove(); }
+    dispose() { cancel(); renderer.domElement.removeEventListener('pointerdown', down); renderer.domElement.removeEventListener('pointerup', up); renderer.domElement.removeEventListener('pointercancel', cancel); observer.disconnect(); geometries.forEach(item => item.dispose()); materials.forEach(item => item.dispose()); renderer.dispose(); renderer.domElement.remove(); }
   };
 }

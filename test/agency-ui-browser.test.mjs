@@ -10,7 +10,7 @@ test('agency: recorrido HTTP sintético en Chromium', { skip: !process.env.OFFIC
   const { chromium } = await import(pathToFileURL(process.env.OFFICE_PLAYWRIGHT).href);
   let mode = 200; const writes = []; const sockets = new Set();
   const agents = [
-    { id: 'a', name: 'Alba', owner_id: 'one', runtime: 'hermes', in_office: false, section_id: null, status: 'online', job_id: null, last_seen_at: '2026-01-01', capabilities: [], version: 1 },
+    { id: 'a', name: 'Alba', owner_id: 'one', runtime: 'hermes', in_office: false, section_id: null, status: 'available', job_id: null, last_seen_at: '2026-01-01', capabilities: [], version: 1 },
     { id: 'b', name: 'Bruno', owner_id: 'two', runtime: 'claude-code', in_office: true, section_id: null, status: 'offline', job_id: null, last_seen_at: '2026-01-01', capabilities: [], version: 1 }
   ];
   const sections = [{ id: 's1', name: 'Taller' }, { id: 's2', name: 'Estudio' }];
@@ -69,6 +69,7 @@ test('agency: recorrido HTTP sintético en Chromium', { skip: !process.env.OFFIC
     const mobile = await browser.newPage({ viewport: { width: 360, height: 800 }, isMobile: true, hasTouch: true });
     await mobile.goto(`http://127.0.0.1:${server.address().port}`); await mobile.getByRole('button', { name: 'Entrar como Marea' }).click();
     await mobile.locator('[data-agent-id="b"] strong').waitFor();
+    assert.equal(await mobile.getByText('Alba', { exact: true }).count(), 0);
     assert.equal(await mobile.locator('[data-agent-id="a"] button:has-text("Retirar")').count(), 0);
     assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     if (process.env.OFFICE_ARTIFACTS && !process.env.OFFICE_WEBGL) await mobile.screenshot({ path: `${process.env.OFFICE_ARTIFACTS}/movil.png`, fullPage: true });
