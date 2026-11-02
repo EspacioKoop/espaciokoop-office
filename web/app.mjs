@@ -7,6 +7,8 @@ let disposeScene = () => {};
 let prefer3D = false;
 let selectedAgent = null;
 let agency = null; let agencyEpoch = 0; let agencyTimer; let agencyMessage = ''; let agencyLoading = false; let agencyMutating = false;
+let jobDraft = { title: '', instruction: '', agentId: '' }; let jobIntent = null; let jobSending = false; let jobDetail = null; let jobDetailMessage = '';
+let pairingOpen = false; let pairingRuntime = 'hermes'; let pairingToken = null; let pairingIntent = null; let pairingBusy = false; let pairingMessage = '';
 const node = (tag, text, className) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e; };
 function tell(message = '') { $('notice').textContent = message; }
 function pill(stage) { return node('span', labels[stage] ?? 'No verificable', `pill ${stage}`); }
@@ -21,7 +23,9 @@ async function api(path, data) {
 function clearView(message = '') {
   disposeScene(); disposeScene = () => {};
   prefer3D = false;
-  selectedAgent = null; agencyEpoch++; agency = null; agencyMessage = ''; agencyLoading = false; agencyMutating = false; clearTimeout(agencyTimer);
+  selectedAgent = null; agencyEpoch++; agency = null; agencyMessage = ''; agencyLoading = false; agencyMutating = false; clearTimeout(agencyTimer); agencyTimer = null;
+  jobDraft = { title: '', instruction: '', agentId: '' }; jobIntent = null; jobSending = false; jobDetail = null; jobDetailMessage = '';
+  pairingOpen = false; pairingToken = null; pairingIntent = null; pairingBusy = false; pairingMessage = '';
   epoch++; snapshot = null; teamQueue = null; presence = null; clearTimeout(refreshTimer); clearTimeout(expiryTimer);
   if (events) { events.close(); events = null; }
   $('office-view').replaceChildren(); $('board').replaceChildren(); $('detail-content').replaceChildren();
@@ -46,6 +50,9 @@ function taskButton(task) {
   return button;
 }
 function renderOffice() {
+  const active = document.activeElement;
+  const focusedDraft = active?.dataset?.jobField;
+  const selection = focusedDraft && active.tagName !== 'SELECT' ? [active.selectionStart, active.selectionEnd] : null;
   disposeScene(); disposeScene = () => {};
   const root = $('office-view'); root.replaceChildren();
   const heading = node('div', undefined, 'section-head'); const intro = node('div');
@@ -55,6 +62,11 @@ function renderOffice() {
   const feedback = node('a', 'Opinar'); feedback.href = 'https://github.com/EspacioKoop/espaciokoop-office/issues/1'; feedback.target = '_blank'; feedback.rel = 'noopener noreferrer';
   heading.append(help, feedback); root.append(heading);
   root.append(renderAgency());
+  if (focusedDraft) {
+    const replacement = root.querySelector(`[data-job-field="${focusedDraft}"]`);
+    replacement?.focus();
+    if (replacement && selection) replacement.setSelectionRange(...selection);
+  }
   const campus = node('div', undefined, 'campus'); const scene = node('section', undefined, 'scene-card');
   const sceneMeta = node('div', undefined, 'scene-meta'); sceneMeta.append(node('h3', 'El espacio común'), node('span', 'Secciones y agentes de la agencia'));
   const image = node('img'); image.src = '/office.svg'; image.alt = 'Ilustración original de la oficina: talleres, mesa compartida, biblioteca y plantas. No muestra agentes reales.';
@@ -293,6 +305,109 @@ async function agencyAction(path, fields) {
     if (error.status === 409) await loadAgency(); else renderOffice();
   } finally { if (started === agencyEpoch) { agencyMutating = false; if (snapshot) renderOffice(); } }
 }
+const jobStates = { queued: 'En cola', running: 'En ejecución', succeeded: 'Finalizada', failed: 'Fallida', unknown: 'Estado desconocido' };
+const jobLabel = job => ['succeeded', 'failed'].includes(job.status) && !job.result ? 'Resultado no confirmado' : jobStates[job.status] || 'Estado no reconocido';
+async function submitJob() {
+  if (jobSending || !agency || !snapshot) return;
+  const agent = agency.agents.find(a => a.id === jobDraft.agentId);
+  const title = jobDraft.title.trim(); const instruction = jobDraft.instruction.trim();
+  if (!agent || agent.owner_id !== agency.owner_id || !agent.in_office || agent.status !== 'available') { agencyMessage = 'Elige un agente propio, incorporado y disponible.'; renderOffice(); return; }
+  if (!title || title.length > 160 || !instruction || instruction.length > 4096) { agencyMessage = 'Completa un título de hasta 160 caracteres y una instrucción de hasta 4096.'; renderOffice(); return; }
+  const fields = { title, instruction, agent_id: agent.id };
+  if (!jobIntent || JSON.stringify(jobIntent.fields) !== JSON.stringify(fields)) jobIntent = { operation_id: crypto.randomUUID(), fields };
+  const intent = jobIntent; const started = agencyEpoch;
+  jobSending = true; agencyMessage = 'Enviando solicitud de trabajo…'; renderOffice();
+  try {
+    const result = await agencyRequest('/api/agency/jobs', { operation_id: intent.operation_id, ...fields });
+    if (started !== agencyEpoch) return;
+    if (!result.body.id) throw new Error('No se ha recibido un identificador de trabajo.');
+    jobIntent = null; jobDraft = { title: '', instruction: '', agentId: '' };
+    agencyMessage = result.body.duplicate ? 'Solicitud ya registrada. Consulta su estado en la cola.' : 'Trabajo registrado en la cola. Aún no consta un resultado.';
+    await loadAgency();
+  } catch (error) {
+    if (started !== agencyEpoch) return;
+    if (error.status === 401) { clearView('La sesión ha caducado. Vuelve a entrar.'); return; }
+    if (error.status === 403) { jobIntent = null; agencyMessage = 'Trabajo denegado. Comprueba que el agente siga siendo propio, incorporado y disponible.'; }
+    else if (error.status === 409) { jobIntent = null; agencyMessage = 'Conflicto: el estado del agente o de la solicitud ha cambiado. Revisa la cola antes de enviar otra vez.'; await loadAgency(); }
+    else agencyMessage = 'No se ha podido confirmar el envío. Puedes reintentarlo con la misma solicitud.';
+  } finally { if (started === agencyEpoch) { jobSending = false; if (snapshot) renderOffice(); } }
+}
+async function loadJobDetail(id) {
+  const started = agencyEpoch; jobDetailMessage = 'Consultando detalle…'; jobDetail = null; renderOffice();
+  try {
+    const { body } = await agencyRequest(`/api/agency/jobs/${encodeURIComponent(id)}`);
+    if (started !== agencyEpoch) return;
+    jobDetail = body; jobDetailMessage = '';
+  } catch (error) {
+    if (started !== agencyEpoch) return;
+    if (error.status === 401) { clearView('La sesión ha caducado. Vuelve a entrar.'); return; }
+    jobDetailMessage = error.status === 403 ? 'No tienes acceso a ese trabajo.' : 'No se puede consultar el detalle del trabajo.';
+  } finally { if (started === agencyEpoch && snapshot) renderOffice(); }
+}
+function renderJobs(panel) {
+  const jobs = node('section', undefined, 'agency-jobs'); jobs.append(node('h4', 'Cola de trabajo'), agencyButton('Actualizar cola', loadAgency));
+  const available = agency.agents.filter(a => a.owner_id === agency.owner_id && a.in_office && a.status === 'available');
+  const form = node('form', undefined, 'agency-job-form');
+  const titleLabel = node('label', 'Título de la tarea'); const title = node('input'); title.required = true; title.maxLength = 160; title.value = jobDraft.title; title.dataset.jobField = 'title';
+  title.addEventListener('input', () => { jobDraft.title = title.value; jobIntent = null; }); titleLabel.append(title);
+  const instructionLabel = node('label', 'Instrucciones para el agente'); const instruction = node('textarea'); instruction.required = true; instruction.maxLength = 4096; instruction.value = jobDraft.instruction; instruction.dataset.jobField = 'instruction';
+  instruction.addEventListener('input', () => { jobDraft.instruction = instruction.value; jobIntent = null; }); instructionLabel.append(instruction);
+  const agentLabel = node('label', 'Agente disponible'); const select = agencySelect(available.map(a => [a.id, a.name]), 'Elige un agente'); select.removeAttribute('aria-label'); select.required = true; select.value = available.some(a => a.id === jobDraft.agentId) ? jobDraft.agentId : '';
+  select.dataset.jobField = 'agentId'; select.addEventListener('change', () => { jobDraft.agentId = select.value; jobIntent = null; }); agentLabel.append(select);
+  const send = node('button', jobIntent ? 'Reintentar envío' : 'Enviar a la cola'); send.type = 'submit'; send.disabled = jobSending || !available.length;
+  form.append(titleLabel, instructionLabel, agentLabel, send);
+  form.addEventListener('submit', event => { event.preventDefault(); submitJob(); });
+  jobs.append(form, node('p', 'Solo se envía al agente elegido. Estar en cola no significa que se haya ejecutado; el resultado aparece cuando lo comunica un conector autorizado.', 'hint'));
+  if (!available.length) jobs.append(node('p', 'No hay agentes propios, incorporados y disponibles para recibir trabajo.', 'hint'));
+  if (!agency.jobs.length) jobs.append(node('p', 'No hay trabajos registrados.', 'empty'));
+  for (const job of agency.jobs) {
+    const row = node('div', undefined, 'agency-job'); row.dataset.jobId = job.id;
+    row.append(node('strong', job.title), node('span', jobLabel(job), `agency-job-status ${job.status}`));
+    if (job.result) row.append(node('p', job.result.summary || 'Resultado comunicado sin resumen.'));
+    else row.append(node('p', 'Sin resultado comunicado.', 'hint'));
+    row.append(agencyButton('Ver detalle', () => loadJobDetail(job.id))); jobs.append(row);
+  }
+  if (jobDetailMessage) jobs.append(node('p', jobDetailMessage, 'hint'));
+  if (jobDetail) {
+    const detail = node('section', undefined, 'agency-job-detail'); detail.append(node('h5', 'Detalle del trabajo'), node('strong', jobDetail.title), node('p', jobLabel(jobDetail)));
+    detail.append(node('p', jobDetail.result ? jobDetail.result.summary || 'Resultado comunicado sin resumen.' : 'Sin resultado comunicado.', 'hint'));
+    detail.append(agencyButton('Cerrar detalle', () => { jobDetail = null; renderOffice(); })); jobs.append(detail);
+  }
+  panel.append(jobs);
+}
+async function registerConnector() {
+  if (pairingBusy || !pairingOpen || !snapshot) return;
+  if (!pairingIntent || pairingIntent.runtime !== pairingRuntime) pairingIntent = { operation_id: crypto.randomUUID(), runtime: pairingRuntime };
+  const intent = pairingIntent; const started = agencyEpoch;
+  pairingBusy = true; pairingMessage = 'Solicitando emparejamiento…'; renderOffice();
+  try {
+    const { body } = await agencyRequest('/api/agency/connectors', intent);
+    if (started !== agencyEpoch) return;
+    pairingIntent = null;
+    pairingToken = typeof body.token === 'string' ? body.token : null;
+    pairingMessage = pairingToken ? 'Token emitido una sola vez. Entrégalo manualmente al cliente autorizado del runtime; al cerrar este panel no podrás volver a verlo.' : 'El conector ya estaba registrado. El token anterior no se puede recuperar desde Office.';
+    await loadAgency();
+  } catch (error) {
+    if (started !== agencyEpoch) return;
+    if (error.status === 401) { clearView('La sesión ha caducado. Vuelve a entrar.'); return; }
+    if (error.status === 403 || error.status === 409) pairingIntent = null;
+    pairingMessage = error.status === 403 ? 'Emparejamiento denegado.' : error.status === 409 ? 'Conflicto de emparejamiento. Revisa el runtime elegido.' : 'No se ha confirmado el emparejamiento. Puedes reintentar la misma solicitud.';
+  } finally { if (started === agencyEpoch) { pairingBusy = false; if (snapshot) renderOffice(); } }
+}
+function renderPairing(panel) {
+  const open = agencyButton('Conectar runtime externo', () => { pairingOpen = !pairingOpen; if (!pairingOpen) { pairingToken = null; pairingMessage = ''; pairingIntent = null; } renderOffice(); });
+  open.setAttribute('aria-expanded', String(pairingOpen)); panel.append(open);
+  if (!pairingOpen) return;
+  const box = node('section', undefined, 'agency-pairing'); box.append(node('h4', 'Emparejar un cliente autorizado'), node('p', 'Este paso registra un conector. El runtime externo se conecta con su propio cliente autorizado. El navegador no crea perfiles, instala claves ni inicia agentes.', 'hint'));
+  const form = node('form'); const label = node('label', 'Runtime del cliente'); const select = node('select');
+  for (const [value, name] of [['hermes', 'Hermes'], ['claude-code', 'Claude Code']]) { const option = node('option', name); option.value = value; select.append(option); }
+  select.value = pairingRuntime; select.addEventListener('change', () => { pairingRuntime = select.value; pairingIntent = null; pairingToken = null; }); label.append(select);
+  const send = node('button', pairingIntent ? 'Reintentar emparejamiento' : 'Emitir token de emparejamiento'); send.type = 'submit'; send.disabled = pairingBusy;
+  form.append(label, send); form.addEventListener('submit', event => { event.preventDefault(); registerConnector(); }); box.append(form);
+  if (pairingMessage) { const message = node('p', pairingMessage); message.setAttribute('role', 'status'); box.append(message); }
+  if (pairingToken) { const tokenLabel = node('p', 'Token de emparejamiento'); const value = node('code', pairingToken); box.append(tokenLabel, value); }
+  panel.append(box);
+}
 function agencyButton(label, handler) { const b = node('button', label); b.type = 'button'; b.addEventListener('click', handler); return b; }
 function agencySelect(items, placeholder) {
   const select = node('select'); select.setAttribute('aria-label', placeholder);
@@ -311,6 +426,8 @@ function renderAgency() {
   const message = node('p', agencyMessage, 'hint'); message.setAttribute('role', 'status'); panel.append(message);
   if (!agency) { panel.append(node('p', agencyLoading ? 'Consultando la agencia…' : 'Agencia sin conexión o sin datos.', 'hint'), agencyButton('Reintentar', loadAgency)); return panel; }
   panel.append(node('p', `Última observación: ${agency.observed_at || 'no disponible'}`, 'hint'));
+  renderJobs(panel);
+  renderPairing(panel);
   const form = node('form'); form.className = 'agency-create';
   const name = node('input'); name.placeholder = 'Nombre de la sección'; name.setAttribute('aria-label', 'Nombre de la sección'); name.maxLength = 120; name.required = true;
   const create = node('button', 'Crear sección'); create.type = 'submit'; create.disabled = agencyMutating;
@@ -345,7 +462,7 @@ function renderAgency() {
     }
     panel.append(card);
   }
-  panel.append(node('p', 'Crear y conectar agentes y asignar tareas aún no está disponible en esta fase.', 'hint'));
+  panel.append(node('p', 'Los agentes los comunica un cliente de runtime autorizado. El navegador no crea perfiles ni instala claves.', 'hint'));
   return panel;
 }
 async function login(key) {
@@ -367,6 +484,17 @@ $('detail').addEventListener('close', () => { detailId = null; $('detail-content
 document.addEventListener('visibilitychange', () => { if (document.hidden) clearView(); else refresh(); });
 window.addEventListener('pagehide', () => clearView()); window.addEventListener('pageshow', () => { if (info) refresh(); });
 window.addEventListener('offline', () => clearView('Sin conexión. Se han retirado los datos.'));
+const help = $('about-view');
+help.replaceChildren(
+  node('h2', 'Ayuda y estado real'),
+  node('p', 'Esta oficina muestra los datos que devuelve el servidor para la sesión actual. En evaluación, los propietarios, agentes y resultados de prueba son sintéticos.'),
+  node('h3', 'Cola de trabajo'),
+  node('p', 'Puedes enviar una instrucción a un agente propio, incorporado y disponible. La cola conserva el encargo; «En cola» no significa que haya empezado. «En ejecución» requiere un claim vigente y el resultado solo aparece cuando un conector autorizado lo comunica. Si caduca el lease, se muestra «Estado desconocido» sin reejecución automática.'),
+  node('h3', 'Conectar un runtime'),
+  node('p', 'El panel de emparejamiento emite un token una sola vez. Debes entregarlo manualmente a un cliente externo autorizado de Hermes o Claude Code. El navegador no crea perfiles, no instala claves y no ejecuta herramientas.'),
+  node('h3', 'Límites'),
+  node('p', 'La escena representa estados recibidos; no acredita por sí sola trabajo. La vista de GitHub mantiene sus propios permisos y la agencia guarda sus trabajos en el servidor cuando está configurada. Este recorrido local no acredita despliegue, conexión bilateral real ni aceptación de producto.')
+);
 try {
   info = await api('/api/info'); $('mode').textContent = info.mode === 'demo' ? 'Evaluación local' : 'GitHub · lectura';
   $('demo-login').hidden = info.mode !== 'demo'; $('key-login').hidden = info.mode !== 'live';

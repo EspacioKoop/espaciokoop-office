@@ -8,9 +8,9 @@ import { createOffice } from '../src/server.mjs';
 
 test('navegador y Office real: agencia persistente y aislamiento', { skip: !process.env.OFFICE_PLAYWRIGHT, timeout: 90000 }, async () => {
   const { chromium } = await import(pathToFileURL(process.env.OFFICE_PLAYWRIGHT).href);
-  const dir = mkdtempSync(join(tmpdir(), 'office-real-')); let app; let browser;
+  const dir = mkdtempSync(join(tmpdir(), 'office-real-')); let app; let browser; let clock = Date.now();
   async function start(port = 0) {
-    app = createOffice({ mode: 'demo', config: { OFFICE_AGENCY_DIR: dir } });
+    app = createOffice({ mode: 'demo', now: () => clock, config: { OFFICE_AGENCY_DIR: dir } });
     await new Promise(resolve => app.server.listen(port, '127.0.0.1', resolve));
     return `http://127.0.0.1:${app.server.address().port}`;
   }
@@ -29,6 +29,45 @@ test('navegador y Office real: agencia persistente y aislamiento', { skip: !proc
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } }); page.setDefaultTimeout(8000);
     await page.goto(origin); await page.getByRole('button', { name: 'Entrar como Aurora' }).click();
     const card = page.locator(`[data-agent-id="${agent.id}"]`); await card.getByRole('button', { name: 'Incorporar' }).click(); await card.getByRole('button', { name: 'Retirar' }).waitFor();
+    const jobPosts = []; page.on('request', req => { if (req.method() === 'POST' && req.url().endsWith('/api/agency/jobs')) jobPosts.push(req.postDataJSON()); });
+    await page.getByLabel('Título de la tarea').fill('Informe sintético');
+    await page.getByLabel('Instrucciones para el agente').fill('Redacta un resumen de prueba.');
+    await page.getByLabel('Agente disponible').selectOption(agent.id);
+    await page.evaluate(() => { const form = document.querySelector('.agency-job-form'); form.dispatchEvent(new Event('submit', { cancelable: true })); form.dispatchEvent(new Event('submit', { cancelable: true })); });
+    const jobRow = page.locator('[data-job-id]').filter({ hasText: 'Informe sintético' });
+    await jobRow.getByText('En cola').waitFor();
+    assert.equal(jobPosts.length, 1); assert.deepEqual(Object.keys(jobPosts[0]).sort(), ['agent_id','instruction','operation_id','title']);
+    const jobId = await jobRow.getAttribute('data-job-id');
+    assert.equal((await request(`/api/agency/jobs/${jobId}`, undefined, { cookie: b })).status, 403);
+    const claimed = (await request('/api/agency/connectors/jobs/claim', { operation_id: 'claim-ui' }, { authorization: `Bearer ${connector.token}` })).body.job;
+    assert.equal(claimed.id, jobId);
+    assert.equal((await request(`/api/agency/connectors/jobs/${jobId}/heartbeat`, { lease: claimed.lease }, { authorization: `Bearer ${connector.token}` })).status, 200);
+    await page.getByRole('button', { name: 'Actualizar cola' }).click(); await jobRow.getByText('En ejecución').waitFor();
+    assert.equal((await request(`/api/agency/connectors/jobs/${jobId}/result`, { lease: claimed.lease, state: 'succeeded', summary: 'Resumen de prueba completado.', artifact_id: 'fixture-ui' }, { authorization: `Bearer ${connector.token}` })).status, 200);
+    await page.getByRole('button', { name: 'Actualizar cola' }).click(); await jobRow.getByText('Finalizada').waitFor(); await jobRow.getByText('Resumen de prueba completado.').waitFor();
+    await jobRow.getByRole('button', { name: 'Ver detalle' }).click(); await page.locator('.agency-job-detail').getByText('Resumen de prueba completado.').waitFor();
+    await page.getByLabel('Título de la tarea').fill('Borrador conservado');
+    await page.getByLabel('Instrucciones para el agente').fill('Instrucción aún sin enviar.');
+    await page.getByRole('button', { name: 'Actualizar cola' }).click();
+    assert.equal(await page.getByLabel('Título de la tarea').inputValue(), 'Borrador conservado');
+    assert.equal(await page.getByLabel('Instrucciones para el agente').inputValue(), 'Instrucción aún sin enviar.');
+    await page.getByLabel('Agente disponible').selectOption(agent.id);
+    assert.equal((await request('/api/agency/connectors/agents', { operation_id: 'busy-ui', agents: [{ agent_ref: 'sintetico', name: 'Alba sintética', status: 'busy', capabilities: [] }] }, { authorization: `Bearer ${connector.token}` })).status, 200);
+    await page.getByRole('button', { name: 'Enviar a la cola' }).click(); await page.getByText(/Conflicto: el estado del agente/).waitFor();
+    assert.equal(await page.getByLabel('Instrucciones para el agente').inputValue(), 'Instrucción aún sin enviar.');
+    assert.equal((await request('/api/agency/connectors/agents', { operation_id: 'available-ui', agents: [{ agent_ref: 'sintetico', name: 'Alba sintética', status: 'available', capabilities: [] }] }, { authorization: `Bearer ${connector.token}` })).status, 200);
+    await page.getByRole('button', { name: 'Actualizar cola' }).click();
+    await page.getByLabel('Título de la tarea').fill('Fallo sintético');
+    await page.getByLabel('Instrucciones para el agente').fill('Devolver un fallo de prueba.');
+    await page.getByLabel('Agente disponible').selectOption(agent.id);
+    await page.getByRole('button', { name: 'Enviar a la cola' }).click();
+    const failedRow = page.locator('[data-job-id]').filter({ hasText: 'Fallo sintético' }); await failedRow.getByText('En cola').waitFor();
+    const failedId = await failedRow.getAttribute('data-job-id');
+    const failedClaim = (await request('/api/agency/connectors/jobs/claim', { operation_id: 'claim-failed-ui' }, { authorization: `Bearer ${connector.token}` })).body.job;
+    assert.equal(failedClaim.id, failedId);
+    const failedSummary = '<img src=x> Fallo comunicado por fixture.';
+    assert.equal((await request(`/api/agency/connectors/jobs/${failedId}/result`, { lease: failedClaim.lease, state: 'failed', summary: failedSummary, artifact_id: 'fixture-failed' }, { authorization: `Bearer ${connector.token}` })).status, 200);
+    await page.getByRole('button', { name: 'Actualizar cola' }).click(); await failedRow.getByText('Fallida').waitFor(); await failedRow.getByText(failedSummary).waitFor(); assert.equal(await failedRow.locator('img').count(), 0);
     await page.getByLabel('Nombre de la sección').fill('Taller sintético'); await page.getByRole('button', { name: 'Crear sección' }).click();
     const zone = page.locator('[data-section-id]').filter({ hasText: 'Taller sintético' }); await zone.waitFor();
     await card.locator('.agency-avatar').dragTo(zone); await zone.getByText('Alba sintética').waitFor();
@@ -74,16 +113,48 @@ test('navegador y Office real: agencia persistente y aislamiento', { skip: !proc
     let attempts = 0; page.on('request', req => { if (req.method() === 'POST' && req.url().endsWith('/assign')) attempts++; });
     await card.locator('select').selectOption({ label: 'Estudio sintético' }); await card.getByRole('button', { name: 'Asignar' }).click();
     await page.getByText(/Conflicto:/).waitFor(); await zone.getByText('Alba sintética').waitFor(); assert.equal(attempts, 1);
+    await page.getByLabel('Título de la tarea').fill('Arrendamiento caducado');
+    await page.getByLabel('Instrucciones para el agente').fill('Caso sintético de expiración.');
+    await page.getByLabel('Agente disponible').selectOption(agent.id);
+    await page.getByRole('button', { name: 'Enviar a la cola' }).click();
+    const expiringRow = page.locator('[data-job-id]').filter({ hasText: 'Arrendamiento caducado' }); await expiringRow.getByText('En cola').waitFor();
+    const expiringId = await expiringRow.getAttribute('data-job-id');
+    const expiringClaim = (await request('/api/agency/connectors/jobs/claim', { operation_id: 'claim-expiry-ui' }, { authorization: `Bearer ${connector.token}` })).body.job;
+    assert.equal(expiringClaim.id, expiringId);
+    await page.getByRole('button', { name: 'Actualizar cola' }).click(); await expiringRow.getByText('En ejecución').waitFor();
+    clock += 3601000;
+    await page.getByRole('button', { name: 'Actualizar cola' }).click(); await page.getByText(/La sesión ha caducado/).waitFor();
+    await page.getByRole('button', { name: 'Entrar como Aurora' }).click(); await expiringRow.getByText('Estado desconocido').waitFor();
     const port = app.server.address().port; await app.close(); app = null; await start(port);
     await page.reload(); await page.getByRole('button', { name: 'Entrar como Aurora' }).click(); await zone.getByText('Alba sintética').waitFor();
+    await page.locator(`[data-job-id="${jobId}"]`).getByText('Resumen de prueba completado.').waitFor();
+    await expiringRow.getByText('Estado desconocido').waitFor();
     const mobile = await browser.newPage({ viewport: { width: 360, height: 800 }, isMobile: true, hasTouch: true });
     await mobile.goto(origin); await mobile.getByRole('button', { name: 'Entrar como Marea' }).click(); await mobile.getByText('Aún no hay agentes visibles.').waitFor();
+    assert.equal(await mobile.locator('[data-job-id]').count(), 0);
     assert.equal(await mobile.getByText('Alba sintética').count(), 0); assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     if (process.env.OFFICE_ARTIFACTS) { await page.screenshot({ path: `${process.env.OFFICE_ARTIFACTS}/real-escritorio.png`, fullPage: true }); await mobile.screenshot({ path: `${process.env.OFFICE_ARTIFACTS}/real-movil.png`, fullPage: true }); }
     await page.bringToFront(); await card.locator('.agency-avatar').click(); await card.locator('.agency-avatar[aria-pressed="true"]').waitFor();
+    await page.getByRole('button', { name: 'Conectar runtime externo' }).click();
+    await page.getByLabel('Runtime del cliente').selectOption('claude-code');
+    await page.getByRole('button', { name: 'Emitir token de emparejamiento' }).click();
+    await page.locator('.agency-pairing code').waitFor();
+    assert.ok((await page.locator('.agency-pairing code').textContent()).length > 20);
+    await page.getByRole('button', { name: 'Conectar runtime externo' }).click();
+    assert.equal(await page.locator('.agency-pairing code').count(), 0);
     await page.getByRole('button', { name: 'Cerrar sesión' }).click(); await page.getByText('Sesión cerrada.').waitFor();
     assert.equal(await page.locator('[data-agent-id]').count(), 0);
-    await page.getByRole('button', { name: 'Entrar como Aurora' }).click(); await card.locator('.agency-avatar[aria-pressed="false"]').waitFor();
+    const reloginHttp = [];
+    page.on('response', response => { if (/\/api\/(session|snapshot|queue|agency|events)/.test(response.url())) reloginHttp.push([new URL(response.url()).pathname, response.status()]); });
+    await page.getByRole('button', { name: 'Entrar como Aurora' }).click();
+    try { await card.locator('.agency-avatar[aria-pressed="false"]').waitFor(); }
+    catch (error) {
+      const dom = await page.evaluate(() => ({ notice: document.querySelector('#notice')?.textContent, loginHidden: document.querySelector('#login')?.hidden, officeHidden: document.querySelector('#office-view')?.hidden, officeText: document.querySelector('#office-view')?.textContent?.slice(0, 500), avatars: [...document.querySelectorAll('.agency-avatar')].map(el => ({ pressed: el.getAttribute('aria-pressed'), text: el.textContent })) }));
+      const http = await Promise.all(['/api/snapshot', '/api/queue', '/api/agency'].map(async path => [path, (await page.request.get(origin + path)).status()]));
+      console.error('relogin diagnostic', JSON.stringify({ dom, reloginHttp, http }));
+      throw error;
+    }
+    assert.ok(reloginHttp.some(([path, status]) => path === '/api/agency' && status === 200));
     await page.context().clearCookies();
     await card.getByRole('button', { name: 'Retirar' }).click(); await page.getByText(/La sesión ha caducado/).waitFor(); assert.equal(await page.locator('[data-agent-id]').count(), 0);
   } finally { await browser?.close(); await app?.close(); rmSync(dir, { recursive: true, force: true }); }
