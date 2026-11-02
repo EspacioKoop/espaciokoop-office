@@ -54,18 +54,14 @@ export function loadRuntimeConfig(path, verifyWorkspace = () => true) {
   if (!c.profile || c.profile.scope !== 'project' || c.profile.approved !== true || !id(c.profile.name) || c.profile.name === 'zeratul' || c.profile.name === 'default' || c.profile.home !== join(c.output_dir, 'profile')) fail('Se requiere perfil de proyecto aprobado.');
   noLinks(c.profile.home);
   privateDirectory(c.profile.home);
-  if (c.runtime === 'hermes') {
-    const identity = join(c.profile.home, 'config.yaml');
-    const st = lstatSync(identity);
-    if (!st.isFile() || st.isSymbolicLink() || st.uid !== process.getuid()) fail('Perfil Hermes no aprovisionado.');
-  }
+  if (c.runtime === 'hermes') fail('Hermes no disponible: su CLI puede delegar en una pasarela fuera del grupo y la cancelación no está garantizada.');
   if (!Number.isSafeInteger(c.timeout_seconds) || c.timeout_seconds < 1 || c.timeout_seconds > 1800) fail('Timeout no válido.');
   if (c.provider_env !== undefined && (!c.provider_env || typeof c.provider_env !== 'object' || Array.isArray(c.provider_env) || Object.entries(c.provider_env).some(([k,v]) => !['ANTHROPIC_API_KEY','OPENAI_API_KEY'].includes(k) || (k === 'ANTHROPIC_API_KEY' && c.provider !== 'anthropic') || (k === 'OPENAI_API_KEY' && c.provider !== 'openai-codex') || typeof v !== 'string' || !v))) fail('Entorno de proveedor no válido.');
   return c;
 }
 
 export function runtimeArgv(c) {
-  if (c.runtime === 'hermes') return ['chat', '--provider', c.provider, '--model', c.model, '--query-file', '-', '--oneshot'];
+  if (c.runtime === 'hermes') fail('Hermes no disponible: cancelación de pasarela no garantizada.');
   return ['--bare', '--strict-mcp-config', '--no-session-persistence', '--model', c.model, '-p'];
 }
 
@@ -124,7 +120,8 @@ function available(c) {
   } catch { return false; }
 }
 
-export async function runAgency(c, { once = true, maxSeconds = 1800, execute } = {}) {
+export async function runAgency(c, { once = true, maxSeconds = 1800, execute, signal } = {}) {
+  if (c.runtime === 'hermes') fail('Hermes no disponible: cancelación de pasarela no garantizada.');
   if (typeof execute !== 'function') fail('Ejecutor local no configurado.');
   const unlock = lockRunner(c);
   const journal = openJournal(c);
@@ -140,10 +137,12 @@ export async function runAgency(c, { once = true, maxSeconds = 1800, execute } =
     }
     if (Object.values(journal.entries).some(j => j.phase === 'unknown')) return { status:'unknown' };
     do {
+      if (signal?.aborted) return { status:'stopped' };
       const ready = available(c);
       try { await heartbeat(c); await report(c, ready ? 'available' : 'offline'); }
       catch (e) { if (once) throw e; await pause(); continue; }
       if (!ready) { if (once) return { status:'offline' }; await pause(); continue; }
+      if (signal?.aborted) return { status:'stopped' };
       const operation_id = randomUUID();
       const claimed = await post(c, '/api/agency/connectors/jobs/claim', { operation_id }, true);
       const job = claimed.job;
@@ -157,18 +156,20 @@ export async function runAgency(c, { once = true, maxSeconds = 1800, execute } =
           j.phase = 'spawned'; journal.save();
           await report(c, 'busy');
           const remaining = Math.max(1, Math.ceil((end-Date.now())/1000));
-          execution = await execute({ ...c, timeout_seconds:Math.min(c.timeout_seconds, remaining) }, job.instruction, async () => { await heartbeat(c); await leaseHeartbeat(c, j); await report(c, 'busy'); });
+          execution = signal?.aborted ? { code:null, output:'', reason:'signal' } : await execute({ ...c, timeout_seconds:Math.min(c.timeout_seconds, remaining) }, job.instruction, async () => { await heartbeat(c); await leaseHeartbeat(c, j); await report(c, 'busy'); }, signal);
         } catch { execution = { code:null, output:'', reason:'lease' }; }
         const artifact_id = randomUUID();
         const artifact = join(c.output_dir, `${artifact_id}.txt`);
         writeFileSync(artifact, execution.output, { mode:0o600, flag:'wx' });
         const fd = openSync(artifact, 'r'); try { fsyncSync(fd); } finally { closeSync(fd); }
         const dir = openSync(c.output_dir, 'r'); try { fsyncSync(dir); } finally { closeSync(dir); }
-        j.result = { artifact_id, state:execution.code === 0 && !execution.reason ? 'succeeded' : 'failed', summary:execution.reason === 'timeout' ? 'Tiempo de ejecución agotado.' : execution.reason === 'lease' ? 'Ejecución detenida por pérdida de autorización o lease.' : execution.code === 0 ? 'Proceso finalizado correctamente.' : `Proceso finalizado con código ${Number.isInteger(execution.code) ? execution.code : 'desconocido'}.` };
+        j.result = { artifact_id, state:execution.code === 0 && !execution.reason ? 'succeeded' : 'failed', summary:execution.reason === 'timeout' ? 'Tiempo de ejecución agotado.' : execution.reason === 'lease' ? 'Ejecución detenida por pérdida de autorización o lease.' : execution.reason ? 'Ejecución detenida; compruebe la limpieza del proceso.' : execution.code === 0 ? 'Proceso finalizado correctamente.' : `Proceso finalizado con código ${Number.isInteger(execution.code) ? execution.code : 'desconocido'}.` };
+        if (execution.reason === 'cleanup') { j.phase = 'unknown'; journal.save(); return { status:'unknown', job_id:job.id, artifact_id }; }
         j.phase = 'result_pending'; journal.save();
         try { await heartbeat(c); await result(c, j); j.phase = 'reported'; }
         catch { j.phase = 'unknown'; }
         journal.save();
+        if (signal?.aborted) return { status:j.phase, job_id:job.id, artifact_id };
         try { await report(c, 'available'); } catch { /* next poll will refresh */ }
         if (once || j.phase === 'unknown') return { status:j.phase, job_id:job.id, artifact_id };
         continue;

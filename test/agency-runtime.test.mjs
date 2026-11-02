@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createOffice } from '../src/server.mjs';
-import { loadRuntimeConfig, runtimeArgv } from '../src/agency-runtime.mjs';
+import { loadRuntimeConfig, runtimeArgv, runAgency } from '../src/agency-runtime.mjs';
 
 const node = process.execPath;
 const runner = resolve('tools/agency-runtime.mjs');
@@ -23,11 +23,17 @@ async function start(dir) {
 const fixture = `#!${node}
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawn } from 'node:child_process';
 const cwd=process.cwd(); const path=join(cwd,'count');
 writeFileSync(join(cwd,'child-pid'),String(process.pid));
 const n=existsSync(path)?Number(readFileSync(path,'utf8')):0;
 writeFileSync(path,String(n+1));
 let input=''; for await (const chunk of process.stdin) input+=chunk;
+if(input.includes('TREE')) {
+ const grand=spawn(process.execPath,['-e',"process.on('SIGTERM',()=>{}); setInterval(()=>{},1000)"],{stdio:'ignore'});
+ writeFileSync(join(cwd,'grand-pid'),String(grand.pid));
+ process.on('SIGTERM',()=>{ grand.once('exit',()=>process.exit(0)); });
+}
 if(input.includes('SLOW')) await new Promise(r=>setTimeout(r,20000));
 if(input.includes('ERROR')) process.exit(7);
 process.stdout.write('fixture-process:'+input);
@@ -42,7 +48,7 @@ function setup() {
   const executable=join(root,'fixture'); writeFileSync(executable,fixture,{mode:0o700});
   const configPath=join(root,'config.json');
   const makeConfig = (origin, token, extra={}) => {
-    const config={origin,connector_token:token,runtime:'hermes',agent_ref:'fixture',name:'Fixture',executable,executable_allowlist:[executable],workspace:repo,profile:{scope:'project',approved:true,name:'office-fixture',home:join(out,'profile')},provider:'openai-codex',model:'fixture-model',output_dir:out,timeout_seconds:3,...extra};
+    const config={origin,connector_token:token,runtime:'claude-code',agent_ref:'fixture',name:'Fixture',executable,executable_allowlist:[executable],workspace:repo,profile:{scope:'project',approved:true,name:'office-fixture',home:join(out,'profile')},provider:'anthropic',model:'fixture-model',output_dir:out,timeout_seconds:3,...extra};
     writeFileSync(configPath,JSON.stringify(config),{mode:0o600}); chmodSync(configPath,0o600);
     return config;
   };
@@ -50,7 +56,7 @@ function setup() {
 }
 async function owner(app, key, op='c') {
   const cookie=(await app.request('/api/session',{key})).cookie;
-  const connector=(await app.request('/api/agency/connectors',{operation_id:op,runtime:'hermes'},{cookie})).body;
+  const connector=(await app.request('/api/agency/connectors',{operation_id:op,runtime:'claude-code'},{cookie})).body;
   return {cookie,connector};
 }
 async function enlist(app,cookie,token) {
@@ -67,6 +73,7 @@ function execRunner(path, args=['--once']) {
   const done=new Promise(resolve=>child.once('exit',code=>resolve({code,stdout,stderr})));
   return {child,done};
 }
+const absent = pid => { try { process.kill(pid,0); return false; } catch(e) { return e.code === 'ESRCH'; } };
 const waitFor=async predicate=>{ for(let i=0;i<100;i++){if(predicate())return;await new Promise(r=>setTimeout(r,50));}throw new Error('fixture no arrancó'); };
 
 test('HTTP → SQLite → proceso fixture → resultado; reinicio y propietarios aislados', async () => {
@@ -104,7 +111,9 @@ test('config privado, enlace y allowlist; argv literal sin shell', () => {
   const f=setup();
   try {
     const c=f.makeConfig('http://127.0.0.1:1234','a'.repeat(64));
-    assert.deepEqual(runtimeArgv(loadRuntimeConfig(f.configPath)),['chat','--provider','openai-codex','--model','fixture-model','--query-file','-','--oneshot']);
+    assert.deepEqual(runtimeArgv(loadRuntimeConfig(f.configPath)),['--bare','--strict-mcp-config','--no-session-persistence','--model','fixture-model','-p']);
+    f.makeConfig(c.origin,c.connector_token,{runtime:'hermes',provider:'openai-codex'}); assert.throws(()=>loadRuntimeConfig(f.configPath), /Hermes no disponible/);
+    f.makeConfig(c.origin,c.connector_token);
     chmodSync(f.configPath,0o644); assert.throws(()=>loadRuntimeConfig(f.configPath));
     chmodSync(f.configPath,0o600);
     const link=join(f.root,'link.json'); symlinkSync(f.configPath,link); assert.throws(()=>loadRuntimeConfig(link));
@@ -184,5 +193,55 @@ test('--serve atiende más de un trabajo y respeta el plazo', async () => {
     assert.ok(Date.now()-started < 5000);
     assert.equal(readFileSync(join(f.repo,'count'),'utf8'),'2');
     for (const id of ids) assert.equal((await app.request(`/api/agency/jobs/${id}`,undefined,{cookie:a.cookie})).body.status,'succeeded');
+  } finally { await app?.close(); f.cleanup(); }
+});
+
+
+test('grupo propio: timeout, revocación y SIGTERM eliminan hijo y nieto', async () => {
+  for (const mode of ['timeout','revoke','signal']) {
+    const f=setup(); let app;
+    try {
+      app=await start(f.dbdir); const a=await owner(app,'demo-aurora'); const agent=await enlist(app,a.cookie,a.connector.token);
+      f.makeConfig(app.origin,a.connector.token,{timeout_seconds:mode === 'timeout' ? 3 : 30});
+      const id=(await app.request('/api/agency/jobs',{operation_id:mode,title:mode,instruction:'TREE SLOW',agent_id:agent},{cookie:a.cookie})).body.id;
+      const running=execRunner(f.configPath);
+      await waitFor(()=>existsSync(join(f.repo,'grand-pid')));
+      const pids=['child-pid','grand-pid'].map(x=>Number(readFileSync(join(f.repo,x),'utf8')));
+      if (mode === 'revoke') assert.equal((await app.request(`/api/agency/connectors/${a.connector.id}/revoke`,{},{cookie:a.cookie})).status,200);
+      if (mode === 'signal') running.child.kill('SIGTERM');
+      const done=await running.done;
+      await waitFor(()=>pids.every(absent));
+      assert.notEqual((await app.request(`/api/agency/jobs/${id}`,undefined,{cookie:a.cookie})).body.status,'succeeded',done.stderr);
+    } finally { await app?.close(); f.cleanup(); }
+  }
+});
+
+test('Hermes falla antes de anunciar disponibilidad o reclamar', async () => {
+  const f=setup(); let app;
+  try {
+    app=await start(f.dbdir); const a=await owner(app,'demo-aurora'); const agent=await enlist(app,a.cookie,a.connector.token);
+    const id=(await app.request('/api/agency/jobs',{operation_id:'hermes-block',title:'Bloqueado',instruction:'prueba',agent_id:agent},{cookie:a.cookie})).body.id;
+    f.makeConfig(app.origin,a.connector.token,{runtime:'hermes',provider:'openai-codex'});
+    const done=await execRunner(f.configPath).done;
+    assert.equal(done.code,1); assert.match(done.stderr,/Hermes no disponible/);
+    assert.equal(existsSync(join(f.repo,'count')),false);
+    const db=new DatabaseSync(join(f.dbdir,'agency.sqlite'));
+    assert.equal(db.prepare('SELECT state FROM work WHERE id=?').get(id).state,'queued'); db.close();
+  } finally { await app?.close(); f.cleanup(); }
+});
+
+
+test('limpieza incierta conserva journal unknown e impide nuevas reclamaciones', async () => {
+  const f=setup(); let app;
+  try {
+    app=await start(f.dbdir); const a=await owner(app,'demo-aurora'); const agent=await enlist(app,a.cookie,a.connector.token);
+    const id=(await app.request('/api/agency/jobs',{operation_id:'uncertain',title:'Incierto',instruction:'fixture',agent_id:agent},{cookie:a.cookie})).body.id;
+    const c=f.makeConfig(app.origin,a.connector.token);
+    let calls=0; const execute=async()=>{ calls++; return {code:0,output:'',reason:'cleanup'}; };
+    assert.equal((await runAgency(c,{execute})).status,'unknown');
+    assert.equal(JSON.parse(readFileSync(join(f.out,'journal.json'),'utf8'))[id].phase,'unknown');
+    assert.equal((await runAgency(c,{execute})).status,'unknown');
+    assert.equal(calls,1);
+    assert.notEqual((await app.request(`/api/agency/jobs/${id}`,undefined,{cookie:a.cookie})).body.status,'succeeded');
   } finally { await app?.close(); f.cleanup(); }
 });
