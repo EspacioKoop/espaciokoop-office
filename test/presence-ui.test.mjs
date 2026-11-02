@@ -19,7 +19,7 @@ class Element {
 const source = readFileSync(new URL('../web/app.mjs', import.meta.url), 'utf8');
 function deferred() { let release; const promise = new Promise(resolve => { release = resolve; }); return { promise, release }; }
 
-async function client() {
+async function client(presenceConfigured = true) {
   let time = 1000; let transport; let nextTimer = 0;
   const timers = new Map(); const elements = new Map(); const calls = []; const streams = [];
   const get = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
@@ -42,7 +42,7 @@ async function client() {
     addEventListener(name, fn) { this.listeners[name] = fn; }
     close() { this.closed = true; }
   }
-  transport = path => response({ '/api/info': { mode: 'live', version: '1.0.0-rc.1' },
+  transport = path => response({ '/api/info': { mode: 'live', version: '1.0.0-rc.1', presenceConfigured },
     '/api/snapshot': snapshot(), '/api/queue': queue(), '/api/presence': presence() }[path]);
   const api = await runInNewContext(`(async () => { ${source}\nreturn { refresh, clearView }; })()`, {
     document, window, Date: Clock, AbortSignal: { timeout: () => undefined }, EventSource: Events,
@@ -54,6 +54,13 @@ async function client() {
   return { ...api, get, window, calls, streams, timers, snapshot, queue, presence, response,
     setTime: value => { time = value; }, setTransport: fn => { transport = fn; } };
 }
+
+test('UI sin presencia configurada muestra proyectos sin inventar agentes', async () => {
+  const ui = await client(false); await ui.refresh();
+  assert.deepEqual(ui.calls.map(call => call.path), ['/api/snapshot', '/api/queue']);
+  assert.match(ui.get('office-view').textContent, /Observatorio/);
+  assert.doesNotMatch(ui.get('office-view').textContent, /PRESENCIA AUTENTICADA/);
+});
 
 test('UI presencia: consume GET /api/presence y muestra solo estados públicos', async () => {
   const ui = await client(); await ui.refresh();

@@ -30,6 +30,10 @@ async function fixture(t, { demo = false, project = 'demo/observatorio' } = {}) 
       const app = createOffice({ mode: ${JSON.stringify(demo ? 'demo' : 'live')}, source: new DemoSource(),
         policyPath: process.env.OFFICE_POLICY, config: process.env });
       app.server.listen(0, '127.0.0.1', () => process.send({ port: app.server.address().port }));
+      // Registered after the real handler: its synchronous guard has run.
+      app.server.on('request', req => {
+        if (req.headers['x-test-partial-body'] === '1') process.send({ partialBody: true });
+      });
       process.once('SIGTERM', async () => { await app.close(); process.exit(0); });
     `;
     // Keep concurrent child processes within a small thread budget.
@@ -79,7 +83,12 @@ async function fixture(t, { demo = false, project = 'demo/observatorio' } = {}) 
         });
       } };
     }
-    return { close, request, login, command, success, view, events, origin, output: () => output };
+    const partialBody = () => new Promise((resolve, reject) => {
+      const onMessage = message => { if (message.partialBody) { clearTimeout(timer); child.off('message', onMessage); resolve(); } };
+      const timer = setTimeout(() => { child.off('message', onMessage); reject(new Error('Partial body did not reach server')); }, 5000);
+      child.on('message', onMessage);
+    });
+    return { close, request, login, command, success, view, events, origin, partialBody, output: () => output };
   }
   return { start, policy, savePolicy, directory, temporaryRoot, root,
     filename: join(directory, `${createHash('sha256').update(project).digest('hex')}.json`) };
@@ -186,27 +195,19 @@ test('espacios: guardia síncrona revalida tras esperar un body parcial', async 
   assert.equal((await app.view(b)).revision, 0);
   const stream = await app.events(b);
   const payload = JSON.stringify(createRoom());
+  const reachedServer = app.partialBody();
   let req;
   const response = new Promise((resolve, reject) => {
     req = rawRequest(app.origin + '/api/space/command', { method: 'POST', headers: {
-      origin: app.origin, cookie: b, 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload),
+      origin: app.origin, cookie: b, 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload), 'x-test-partial-body': '1',
     } }, res => { let text = ''; res.on('data', c => { text += c; }); res.on('end', () => resolve({ status: res.statusCode, text })); });
     req.setTimeout(8000, () => req.destroy(new Error('Partial body timeout'))); req.on('error', reject);
   });
   req.flushHeaders(); await new Promise(resolve => req.write(payload.slice(0, 10), resolve));
-  // A rejected concurrent read proves the first request passed its initial
-  // session guard and is waiting for the body before we change the policy.
-  // El callback write solo confirma envío local; el segundo socket puede
-  // llegar antes al servidor. Esperar la señal observable mantiene la prueba
-  // de la guardia sin depender del orden de recepción entre conexiones.
-  let concurrent;
-  for (let attempt = 0; attempt < 100; attempt++) {
-    concurrent = await app.request('/api/space', { cookie: b });
-    if (concurrent.status === 429) break;
-    assert.equal(concurrent.status, 200);
-    await concurrent.arrayBuffer();
-    await new Promise(resolve => setTimeout(resolve, 20));
-  }
+  // A GET probe arriving first could itself hold the guard and reject the POST.
+  // IPC only observes receipt; the 429 and revocation assertions remain real HTTP.
+  await reachedServer;
+  const concurrent = await app.request('/api/space', { cookie: b });
   assert.equal(concurrent.status, 429);
   assert.deepEqual(await concurrent.json(), { error: 'RATE_LIMIT' });
   f.policy.projects[0].readers = ['aurora']; await f.savePolicy();

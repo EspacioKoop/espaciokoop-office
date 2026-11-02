@@ -19,6 +19,11 @@ ni aceptado una versión 1.0. Ver [ESTADO.md](ESTADO.md).
 
 Node.js **22.16 o posterior**. Sin dependencias de runtime que instalar.
 
+La oficina incluye una vista 3D ambiental opcional con Three.js distribuido
+localmente y controles de giro; la ilustración 2D sigue disponible. La escena
+todavía no muestra agentes ni permite asignar trabajo. La dirección de producto
+confirmada es 3D tipo Sims con cooperación asíncrona, no una entrega ya completa.
+
 ```sh
 git fetch origin
 git switch main
