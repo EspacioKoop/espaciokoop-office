@@ -1,0 +1,9 @@
+# Cola de agencia por HTTP
+
+Base de trabajo: `0429ddef8ec29d11482690deafa6836ca291e4fe`. Entrega local para integración, sin despliegue ni conexión de agentes reales.
+
+La sesión del propietario puede crear un trabajo con `POST /api/agency/jobs` (`operation_id`, `title`, `instruction`, `agent_id`). El servidor obtiene el propietario y el conector asociado al agente incorporado y disponible. El identificador de operación es idempotente por propietario: el mismo contenido conserva el identificador y otro contenido produce 409. Las lecturas `GET /api/agency` y `GET /api/agency/jobs/:id` solo exponen trabajos propios, estado y resultado; no exponen instrucciones ni leases.
+
+El conector autenticado con Bearer usa `POST /api/agency/connectors/jobs/claim` con `operation_id`, que devuelve `{job: ...}` o `{job: null}`. Repetir esa operación devuelve el mismo trabajo y lease mientras siga vigente; si terminó, caducó o la primera respuesta fue vacía, devuelve `null` y nunca reclama otro trabajo con esa operación. Para intentar reclamar otro hay que usar una operación nueva. Una ejecución simultánea impide reclamar otro trabajo para el mismo agente. El conector envía `heartbeat` con `lease` y `result` con `lease`, `state`, `summary` y `artifact_id` bajo `/api/agency/connectors/jobs/:id/`. El resultado solo se acredita después de recibirlo. Un lease caducado pasa a `unknown`, sin reejecución automática. Las credenciales revocadas o caducadas no reclaman ni terminan trabajos. Los recibos de claim guardan identificadores, no leases ni instrucciones.
+
+El origen de las peticiones POST se comprueba con la protección CSRF existente. La base SQLite permanece en el directorio privado configurado. El flujo se ha verificado con servidor HTTP real, dos propietarios y conectores sintéticos; no ejecuta procesos, modelos, Hermes ni Claude Code. Conectar un runtime real y verificarlo es un tramo posterior sujeto a autorización.

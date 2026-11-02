@@ -47,13 +47,13 @@ function json(res, status, value, headers = {}) {
   res.writeHead(status, { ...security, 'Content-Type': 'application/json; charset=utf-8', ...headers });
   res.end(JSON.stringify(value));
 }
-async function body(req, allowed) {
+async function body(req, allowed, limit = 2048) {
   insist(req.headers['content-type']?.split(';')[0] === 'application/json', 'CONTENT_TYPE', 'Se requiere JSON.', 415);
   const chunks = []; let length = 0;
   // Keep the connection writable on rejection; no unbounded buffering/draining.
   for await (const chunk of req.iterator({ destroyOnReturn: false })) {
     length += chunk.length;
-    insist(length <= 2048, 'BODY_LIMIT', 'Petición demasiado grande.', 413);
+    insist(length <= limit, 'BODY_LIMIT', 'Petición demasiado grande.', 413);
     chunks.push(chunk);
   }
   let data;
@@ -257,6 +257,19 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
         const data = await body(req, ['operation_id', 'agents']);
         return json(res, 200, agency.report(agency.authenticate(token, policy()), data));
       }
+      const jobConnector = /^\/api\/agency\/connectors\/jobs\/([a-z0-9-]+)\/(heartbeat|result)$/i.exec(url.pathname);
+      if (req.method === 'POST' && (url.pathname === '/api/agency/connectors/jobs/claim' || jobConnector)) {
+        insist(agency, 'AGENCY_UNAVAILABLE', 'Agencia no disponible.', 503);
+        const token = /^Bearer ([^\s]+)$/.exec(req.headers.authorization ?? '')?.[1];
+        agency.authenticate(token, policy());
+        const fields = !jobConnector ? ['operation_id'] : jobConnector[2] === 'heartbeat' ? ['lease'] : ['lease','state','summary','artifact_id'];
+        const data = await body(req, fields);
+        const connector = agency.authenticate(token, policy());
+        const identity = { owner:connector.owner, connector:connector.id };
+        if (!jobConnector) { insist(typeof data.operation_id === 'string', 'FIELDS', 'Operación no válida.'); return json(res, 200, { job:agency.claim({ ...identity, operation:data.operation_id }) }); }
+        const request = { ...data, ...identity, id:jobConnector[1] };
+        return json(res, 200, jobConnector[2] === 'heartbeat' ? agency.jobHeartbeat(request) : agency.finish(request));
+      }
       const p = policy(); const { id, session } = getSession(req, p);
       if (url.pathname.startsWith('/api/agency')) {
         insist(agency, 'AGENCY_UNAVAILABLE', 'Agencia no disponible.', 503);
@@ -264,6 +277,12 @@ export function createOffice({ mode = 'demo', policyPath, source, policyLoader, 
           const result = agency.snapshot(session.memberId); getSession(req, policy());
           return json(res, 200, result);
         }
+        if (req.method === 'POST' && url.pathname === '/api/agency/jobs') {
+          const data = await body(req, ['operation_id','title','instruction','agent_id'], 65536); getSession(req, policy());
+          return json(res, 201, agency.enqueue(session.memberId, data));
+        }
+        const job = /^\/api\/agency\/jobs\/([a-z0-9-]+)$/i.exec(url.pathname);
+        if (req.method === 'GET' && job) return json(res, 200, agency.read(session.memberId, job[1]));
         if (req.method === 'POST' && url.pathname === '/api/agency/sections') {
           const data = await body(req, ['operation_id', 'name']); getSession(req, policy());
           return json(res, 201, agency.section(session.memberId, data));

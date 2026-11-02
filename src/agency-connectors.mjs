@@ -118,12 +118,21 @@ export function openAgencyConnectors({ directory, now = Date.now }) {
       return { id, version: agent.version+1 };
     });
   }
+  function enqueue(owner, data) {
+    insist(identifier(data.agent_id), 'FIELDS', 'Agente no válido.');
+    const agent = db.prepare('SELECT * FROM agency_agents WHERE owner=? AND id=? AND revoked=0').get(owner, data.agent_id);
+    insist(agent, 'FORBIDDEN', 'Agente no autorizado.', 403);
+    return queue.enqueue({ owner, operation:data.operation_id, title:data.title, instruction:data.instruction, connector:agent.connector, agent:agent.id }, () => {
+      const c = db.prepare('SELECT * FROM agency_connectors WHERE id=? AND owner=?').get(agent.connector, owner);
+      insist(agent.in_office && agent.status === 'available' && now()-agent.last_seen <= 60000 && c && !c.revoked && c.last_seen !== null && now()-c.last_seen <= 60000, 'NOT_AVAILABLE', 'Agente no disponible.', 409);
+    });
+  }
   function snapshot(owner) {
     const time = now();
     const connectors = db.prepare('SELECT id,owner,runtime,revoked,last_seen FROM agency_connectors WHERE owner=? ORDER BY id').all(owner).map(c => ({ id:c.id, owner_id:c.owner, runtime:c.runtime, status:c.revoked ? 'offline' : c.last_seen === null ? 'unknown' : time-c.last_seen <= 60000 ? 'online' : 'offline', last_seen_at:c.last_seen, capabilities:[] }));
     const byId = new Map(connectors.map(c => [c.id,c]));
     const agents = db.prepare('SELECT * FROM agency_agents WHERE owner=? AND revoked=0 ORDER BY id').all(owner).map(a => ({ id:a.id,name:a.name,owner_id:a.owner,runtime:byId.get(a.connector).runtime,in_office:Boolean(a.in_office),section_id:a.section,status:byId.get(a.connector).status === 'online' && time-a.last_seen <= 60000 ? a.status : 'offline',job_id:null,last_seen_at:a.last_seen,capabilities:JSON.parse(a.capabilities),version:a.version }));
-    return { version:1, revision:(db.prepare('SELECT revision FROM agency_owner_revision WHERE owner=?').get(owner)?.revision ?? 0), owner_id:owner, agents, jobs:[], sections:db.prepare('SELECT id,name FROM agency_sections WHERE owner=? ORDER BY id').all(owner), learnings:[], connectors, capabilities:{create_agent:false,connect_agent:false,assign:agents.some(a => a.in_office && a.status === 'available')},observed_at:time };
+    return { version:1, revision:(db.prepare('SELECT revision FROM agency_owner_revision WHERE owner=?').get(owner)?.revision ?? 0), owner_id:owner, agents, jobs:queue.list(owner), sections:db.prepare('SELECT id,name FROM agency_sections WHERE owner=? ORDER BY id').all(owner), learnings:[], connectors, capabilities:{create_agent:false,connect_agent:false,assign:agents.some(a => a.in_office && a.status === 'available')},observed_at:time };
   }
-  return { register, authenticate, heartbeat, revoke, report, section, move, snapshot, close() { db.close(); queue.close(); } };
+  return { register, authenticate, heartbeat, revoke, report, section, move, snapshot, enqueue, read:queue.read, claim:queue.claim, jobHeartbeat:queue.heartbeat, finish:queue.finish, close() { db.close(); queue.close(); } };
 }
