@@ -142,10 +142,20 @@ export async function runAgency(c, { once = true, maxSeconds = 1800, execute, si
     if (Object.values(journal.entries).some(j => j.phase === 'unknown')) return { status:'unknown' };
     do {
       if (signal?.aborted) return { status:'stopped' };
-      const ready = available(c);
+      let reason_code = 'executable_unavailable';
+      let ready = available(c);
+      if (ready && c.runtime === 'hermes') {
+        try {
+          const probe = await execute({ ...c, probe:true, timeout_seconds:Math.min(c.timeout_seconds, 15) }, '', async () => {}, signal);
+          const diagnostic = JSON.parse(probe.output);
+          ready = probe.code === 0 && !probe.reason && diagnostic.ready === true && diagnostic.reason_code === 'ready';
+          reason_code = ready ? 'ready' : (['auth_unavailable','runtime_unavailable','provider_unavailable'].includes(diagnostic.reason_code) ? diagnostic.reason_code : 'probe_failed');
+        } catch { ready = false; reason_code = 'probe_failed'; }
+      }
+      if (signal?.aborted) return { status:'stopped' };
       try { await heartbeat(c); await report(c, ready ? 'available' : 'offline'); }
       catch (e) { if (once) throw e; await pause(); continue; }
-      if (!ready) { if (once) return { status:'offline' }; await pause(); continue; }
+      if (!ready) { if (once) return { status:'offline', reason_code }; await pause(); continue; }
       if (signal?.aborted) return { status:'stopped' };
       const operation_id = randomUUID();
       const claimed = await post(c, '/api/agency/connectors/jobs/claim', { operation_id }, true);
@@ -174,7 +184,7 @@ export async function runAgency(c, { once = true, maxSeconds = 1800, execute, si
         catch { j.phase = 'unknown'; }
         journal.save();
         if (signal?.aborted) return { status:j.phase, job_id:job.id, artifact_id };
-        try { await report(c, 'available'); } catch { /* next poll will refresh */ }
+        try { await report(c, c.runtime === 'hermes' ? 'offline' : 'available'); } catch { /* next poll will refresh */ }
         if (once || j.phase === 'unknown') return { status:j.phase, job_id:job.id, artifact_id };
         continue;
       }

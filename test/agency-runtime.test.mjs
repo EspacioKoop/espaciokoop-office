@@ -24,6 +24,7 @@ const fixture = `#!${node}
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+if (process.argv.includes('--check-runtime')) { process.stdout.write(JSON.stringify({ready:true,reason_code:'ready'})); process.exit(0); }
 const cwd=process.cwd(); const path=join(cwd,'count');
 writeFileSync(join(cwd,'child-pid'),String(process.pid));
 const n=existsSync(path)?Number(readFileSync(path,'utf8')):0;
@@ -237,7 +238,7 @@ test('HTTP → SQLite → proceso Hermes fixture → resultado, sin inferencia',
 test('wrapper llama a la API local con proveedor explícito y sin gateway', () => {
   const f=setup();
   try {
-    const harness = `import sys,types,runpy,socket\nsocket.socket.connect=lambda *a: (_ for _ in ()).throw(AssertionError('red prohibida'))\np=types.ModuleType('hermes_cli'); p.__path__=[]; sys.modules['hermes_cli']=p\nr=types.ModuleType('hermes_cli.runtime_provider')\ndef resolve_runtime_provider(**k):\n assert k=={'requested':'openai-codex','target_model':'fixture-model'}\n return {'provider':'openai-codex','api_mode':'codex_responses','api_key':'fixture','base_url':'https://invalid'}\nr.resolve_runtime_provider=resolve_runtime_provider; sys.modules[r.__name__]=r\nm=types.ModuleType('run_agent')\nclass Agent:\n def __init__(self,**k):\n  assert k['enabled_toolsets']==[] and k['skip_memory'] and k['skip_context_files'] and k['fallback_model'] is None\n  self.provider=k['provider']; self.api_mode=k['api_mode']; self._fallback_chain=[]\n def run_conversation(self, text):\n  assert text=='entrada literal'\n  return {'completed':True,'provider':'openai-codex','model':'fixture-model','final_response':'respuesta fixture'}\nm.AIAgent=Agent; sys.modules['run_agent']=m\nsys.argv=['wrapper','--model','fixture-model']\nrunpy.run_path(${JSON.stringify(resolve('tools/hermes-office-local.py'))},run_name='__main__')`;
+    const harness = `import sys,types,runpy,socket\nsocket.socket.connect=lambda *a: (_ for _ in ()).throw(AssertionError('red prohibida'))\np=types.ModuleType('hermes_cli'); p.__path__=[]; sys.modules['hermes_cli']=p\nr=types.ModuleType('hermes_cli.runtime_provider')\ndef resolve_runtime_provider(**k):\n assert k=={'requested':'openai-codex','target_model':'fixture-model'}\n return {'provider':'openai-codex','api_mode':'codex_responses','api_key':'fixture','base_url':'https://invalid'}\nr.resolve_runtime_provider=resolve_runtime_provider; sys.modules[r.__name__]=r\nm=types.ModuleType('run_agent')\nclass Agent:\n def __init__(self,**k):\n  assert k['enabled_toolsets']==[] and k['skip_memory'] and k['skip_context_files'] and k['fallback_model'] is None\n  self.provider=k['provider']; self.api_mode=k['api_mode']; self.model=k['model']; self._fallback_chain=[]\n def run_conversation(self, text):\n  assert text=='entrada literal'\n  return {'completed':True,'provider':'openai-codex','model':'fixture-model','final_response':'respuesta fixture'}\nm.AIAgent=Agent; sys.modules['run_agent']=m\nsys.argv=['wrapper','--model','fixture-model']\nrunpy.run_path(${JSON.stringify(resolve('tools/hermes-office-local.py'))},run_name='__main__')`;
     const home=join(f.out,'profile');
     const result=spawnSync('/usr/bin/python3',['-c',harness],{input:'entrada literal',encoding:'utf8',env:{HOME:home,HERMES_HOME:join(home,'hermes'),PATH:'/usr/bin:/bin'}});
     assert.equal(result.status,0,result.stderr); assert.equal(result.stdout,'respuesta fixture');
@@ -257,5 +258,60 @@ test('limpieza incierta conserva journal unknown e impide nuevas reclamaciones',
     assert.equal((await runAgency(c,{execute})).status,'unknown');
     assert.equal(calls,1);
     assert.notEqual((await app.request(`/api/agency/jobs/${id}`,undefined,{cookie:a.cookie})).body.status,'succeeded');
+  } finally { await app?.close(); f.cleanup(); }
+});
+
+test('Hermes sin imports reales no anuncia disponibilidad ni reclama trabajo', async () => {
+  const f=setup(); let app;
+  try {
+    app=await start(f.dbdir); const a=await owner(app,'demo-aurora'); const agent=await enlist(app,a.cookie,a.connector.token);
+    const id=(await app.request('/api/agency/jobs',{operation_id:'no-auth',title:'Pendiente',instruction:'prueba',agent_id:agent},{cookie:a.cookie})).body.id;
+    const python='/usr/bin/python3';
+    f.makeConfig(app.origin,a.connector.token,{runtime:'hermes',provider:'openai-codex',executable:python,executable_allowlist:[python]});
+    const done=await execRunner(f.configPath).done;
+    assert.equal(done.code,2,done.stderr);
+    assert.deepEqual(JSON.parse(done.stdout),{status:'offline',reason_code:'runtime_unavailable'});
+    const db=new DatabaseSync(join(f.dbdir,'agency.sqlite'));
+    assert.equal(db.prepare('SELECT state FROM work WHERE id=?').get(id).state,'queued'); db.close();
+    const snapshot=(await app.request('/api/agency',undefined,{cookie:a.cookie})).body;
+    assert.equal(snapshot.agents[0].status,'offline');
+  } finally { await app?.close(); f.cleanup(); }
+});
+
+test('probe con timeout elimina descendientes antes de reclamar', async () => {
+  const f=setup(); let app;
+  try {
+    const hanging = `#!${node}\nimport {spawn} from 'node:child_process'; import {writeFileSync} from 'node:fs';\nconst child=spawn(process.execPath,['-e',"setInterval(()=>{},1000)"],{stdio:'ignore'});\nwriteFileSync('probe-pid',String(process.pid)); writeFileSync('probe-grand-pid',String(child.pid));\nprocess.on('SIGTERM',()=>{child.once('exit',()=>process.exit(0))}); setInterval(()=>{},1000);\n`;
+    writeFileSync(f.executable,hanging,{mode:0o700});
+    app=await start(f.dbdir); const a=await owner(app,'demo-aurora'); const agent=await enlist(app,a.cookie,a.connector.token);
+    const id=(await app.request('/api/agency/jobs',{operation_id:'probe-timeout',title:'Pendiente',instruction:'prueba',agent_id:agent},{cookie:a.cookie})).body.id;
+    f.makeConfig(app.origin,a.connector.token,{runtime:'hermes',provider:'openai-codex',timeout_seconds:1});
+    const done=await execRunner(f.configPath).done;
+    assert.equal(done.code,2,done.stderr); assert.equal(JSON.parse(done.stdout).reason_code,'probe_failed');
+    const pids=['probe-pid','probe-grand-pid'].map(x=>Number(readFileSync(join(f.repo,x),'utf8')));
+    await waitFor(()=>pids.every(absent));
+    const db=new DatabaseSync(join(f.dbdir,'agency.sqlite'));
+    assert.equal(db.prepare('SELECT state FROM work WHERE id=?').get(id).state,'queued'); db.close();
+  } finally { await app?.close(); f.cleanup(); }
+});
+
+test('Python con imports instalados y autenticación ausente no anuncia ni reclama', async () => {
+  const f=setup(); let app;
+  try {
+    const pkg=join(f.root,'hermes_cli'); mkdirSync(pkg); writeFileSync(join(pkg,'__init__.py'),'');
+    writeFileSync(join(pkg,'runtime_provider.py'),"def resolve_runtime_provider(*, requested, target_model):\n assert requested == 'openai-codex' and target_model == 'fixture-model'\n raise RuntimeError('secreto sintético no debe salir')\n");
+    writeFileSync(join(f.root,'run_agent.py'),"class AIAgent:\n def __init__(self, **kwargs): pass\n def run_conversation(self, text): pass\n");
+    writeFileSync(f.executable,`#!/usr/bin/python3\nimport runpy,sys\nsys.argv=sys.argv[1:]\nrunpy.run_path(sys.argv[0],run_name='__main__')\n`,{mode:0o700});
+    app=await start(f.dbdir); const a=await owner(app,'demo-aurora'); const agent=await enlist(app,a.cookie,a.connector.token);
+    const id=(await app.request('/api/agency/jobs',{operation_id:'auth-missing',title:'Pendiente',instruction:'prueba',agent_id:agent},{cookie:a.cookie})).body.id;
+    f.makeConfig(app.origin,a.connector.token,{runtime:'hermes',provider:'openai-codex'});
+    const done=await execRunner(f.configPath).done;
+    assert.equal(done.code,2,done.stderr);
+    assert.deepEqual(JSON.parse(done.stdout),{status:'offline',reason_code:'auth_unavailable'});
+    assert.equal(done.stdout.includes('secreto sintético'),false);
+    const db=new DatabaseSync(join(f.dbdir,'agency.sqlite'));
+    assert.equal(db.prepare('SELECT state FROM work WHERE id=?').get(id).state,'queued'); db.close();
+    const snapshot=(await app.request('/api/agency',undefined,{cookie:a.cookie})).body;
+    assert.equal(snapshot.agents[0].status,'offline');
   } finally { await app?.close(); f.cleanup(); }
 });

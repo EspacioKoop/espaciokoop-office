@@ -13,7 +13,7 @@ function execute(c, instruction, onTick, signal) {
       mkdirSync(env.HERMES_HOME, { mode:0o700, recursive:true });
     }
     let child;
-    try { child = spawn(c.executable, runtimeArgv(c), { cwd:c.workspace, env, stdio:['pipe','pipe','pipe'], shell:false, detached:true }); }
+    try { child = spawn(c.executable, [...runtimeArgv(c), ...(c.probe ? ['--check-runtime'] : [])], { cwd:c.workspace, env, stdio:['pipe','pipe','pipe'], shell:false, detached:true }); }
     catch { resolve({ code:null, output:'', reason:'spawn' }); return; }
     let output = '', bytes = 0, reason = null, stopping = false, finished = false, exited = false, closed = false, code = null;
     let killTimer, checkTimer, finishTimer;
