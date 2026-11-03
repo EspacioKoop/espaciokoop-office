@@ -89,9 +89,23 @@ test('rechaza perfil que el probe ha vuelto incompatible', () => {
   const f = fixture('{}');
   try {
     const c = JSON.parse(readFileSync(f.path, 'utf8'));
-    writeFileSync(c.executable, `#!${process.execPath}\nrequire('node:fs').mkdirSync(${JSON.stringify(join(c.profile.home,'hermes','hooks'))},{recursive:true}); process.stdout.write('{"ready":true,"reason_code":"ready"}');`, {mode:0o700});
+    writeFileSync(c.executable, `#!${process.execPath}\nprocess.getBuiltinModule('node:fs').mkdirSync(${JSON.stringify(join(c.profile.home,'hermes','hooks'))},{recursive:true}); process.stdout.write('{"ready":true,"reason_code":"ready"}');`, {mode:0o700});
     const r = f.run('--check');
     assert.equal(r.status, 1);
     assert.deepEqual(JSON.parse(r.stdout), {ready:false,reason_code:'invalid_config'});
+  } finally { rmSync(f.root,{recursive:true,force:true}); }
+});
+
+test('enlace Hermes colgante se rechaza antes de lanzar el probe', () => {
+  const f=fixture('{}');
+  try {
+    const c=JSON.parse(readFileSync(f.path,'utf8'));
+    const marker=join(f.out,'launched');
+    writeFileSync(c.executable, `#!${process.execPath}\nprocess.getBuiltinModule('node:fs').writeFileSync(${JSON.stringify(marker)},'launched');`, {mode:0o700});
+    symlinkSync('missing',join(c.profile.home,'hermes'));
+    const r=f.run('--check');
+    assert.equal(r.status,1);
+    assert.deepEqual(JSON.parse(r.stdout),{ready:false,reason_code:'invalid_config'});
+    assert.equal(readFileSafe(marker),null);
   } finally { rmSync(f.root,{recursive:true,force:true}); }
 });
