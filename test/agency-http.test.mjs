@@ -63,6 +63,45 @@ test('sin almacén configurado, agencia falla cerrado tras autenticación', asyn
   } finally { await app.close(); }
 });
 
+test('diagnóstico sintético HTTP: migración, vigencia, aislamiento e idempotencia', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'agency-diagnostic-')); let app;
+  try {
+    app = await start(dir);
+    let a = (await app.request('/api/session', {key:'demo-aurora'})).cookie;
+    const b = (await app.request('/api/session', {key:'demo-marea'})).cookie;
+    const connector = (await app.request('/api/agency/connectors', {operation_id:'c',runtime:'hermes'}, {cookie:a})).body;
+    const auth = {authorization:`Bearer ${connector.token}`};
+    const item = {agent_ref:'fixture',name:'Agente sintético',status:'offline',capabilities:[],reason_code:'auth_unavailable'};
+    const report = (operation_id, agent = item) => ({operation_id,agents:[agent]});
+    const send = data => app.request('/api/agency/connectors/agents',data,auth);
+    assert.equal((await send(report('first'))).status,200);
+    assert.equal((await send(report('first'))).status,200);
+    assert.equal((await send(report('first',{...item,reason_code:'probe_failed'}))).status,409);
+    assert.equal((await send(report('bad',{...item,reason_code:'error /privado token'}))).status,400);
+    assert.equal((await app.request('/api/agency',undefined,{cookie:a})).body.agents[0].reason_code,'auth_unavailable');
+    assert.equal((await app.request('/api/agency',undefined,{cookie:b})).body.agents.length,0);
+    await app.close(); app=await start(dir); a=(await app.request('/api/session',{key:'demo-aurora'})).cookie;
+    assert.equal((await app.request('/api/agency',undefined,{cookie:a})).body.agents[0].reason_code,'auth_unavailable');
+    assert.equal((await send(report('ready',{...item,status:'available'}))).status,200);
+    assert.equal((await app.request('/api/agency',undefined,{cookie:a})).body.agents[0].reason_code,null);
+    assert.equal((await send(report('again'))).status,200);
+    const {reason_code, ...withoutReason} = item;
+    assert.equal((await send(report('without',withoutReason))).status,200);
+    assert.equal((await app.request('/api/agency',undefined,{cookie:a})).body.agents[0].reason_code,null);
+    assert.equal((await send(report('expire'))).status,200);
+    let db = new DatabaseSync(join(dir,'agency.sqlite')); db.prepare('UPDATE agency_agents SET last_seen=?').run(Date.now()-61000); db.close();
+    assert.equal((await app.request('/api/agency',undefined,{cookie:a})).body.agents[0].reason_code,null);
+    assert.equal((await send(report('revoke'))).status,200);
+    assert.equal((await app.request(`/api/agency/connectors/${connector.id}/revoke`,{},{cookie:a})).status,200);
+    assert.equal((await app.request('/api/agency',undefined,{cookie:a})).body.agents[0].reason_code,null);
+    await app.close(); app=null;
+    db = new DatabaseSync(join(dir,'agency.sqlite')); db.exec('ALTER TABLE agency_agents DROP COLUMN reason_code'); db.close();
+    app=await start(dir); a=(await app.request('/api/session',{key:'demo-aurora'})).cookie;
+    const migrated=(await app.request('/api/agency',undefined,{cookie:a})).body.agents;
+    assert.equal(migrated.length,1); assert.equal(migrated[0].name,'Agente sintético'); assert.equal(migrated[0].reason_code,null);
+  } finally { await app?.close(); rmSync(dir,{recursive:true,force:true}); }
+});
+
 test('inventario reportado y movimientos duraderos, aislados por propietario', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'agency-flow-')); let app;
   try {

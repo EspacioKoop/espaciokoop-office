@@ -6,6 +6,7 @@ import { openAgencyQueue } from './agency-queue.mjs';
 
 const fingerprint = value => createHash('sha256').update(value).digest('hex');
 const identifier = value => typeof value === 'string' && /^[a-z0-9][a-z0-9._:-]{0,95}$/i.test(value);
+const reasons = ['auth_unavailable','runtime_unavailable','provider_unavailable','executable_unavailable','probe_failed'];
 
 // The queue validates the private directory and owns creation of agency.sqlite.
 export function openAgencyConnectors({ directory, now = Date.now }) {
@@ -22,6 +23,7 @@ export function openAgencyConnectors({ directory, now = Date.now }) {
     CREATE TABLE IF NOT EXISTS agency_sections (id TEXT PRIMARY KEY, owner TEXT NOT NULL, name TEXT NOT NULL, UNIQUE(owner,name));
     CREATE TABLE IF NOT EXISTS agency_operations (scope TEXT NOT NULL, operation TEXT NOT NULL, fingerprint TEXT NOT NULL, result TEXT NOT NULL, PRIMARY KEY(scope,operation));
     CREATE TABLE IF NOT EXISTS agency_owner_revision (owner TEXT PRIMARY KEY, revision INTEGER NOT NULL);`);
+    if (!db.prepare('PRAGMA table_info(agency_agents)').all().some(column => column.name === 'reason_code')) db.exec('ALTER TABLE agency_agents ADD COLUMN reason_code TEXT');
   } catch (error) { queue.close(); throw error; }
   function register(owner, data) {
     insist(identifier(owner) && identifier(data.operation_id) && ['hermes', 'claude-code'].includes(data.runtime), 'FIELDS', 'Datos de conector no válidos.');
@@ -81,13 +83,13 @@ export function openAgencyConnectors({ directory, now = Date.now }) {
     insist(Array.isArray(data.agents) && data.agents.length <= 20, 'FIELDS', 'Lista no válida.');
     const refs = new Set();
     for (const a of data.agents) {
-      insist(a && typeof a === 'object' && !Array.isArray(a) && Object.keys(a).every(k => ['agent_ref','name','status','capabilities'].includes(k)) && identifier(a.agent_ref) && !refs.has(a.agent_ref) && validName(a.name) && ['available','busy','offline','unknown'].includes(a.status) && Array.isArray(a.capabilities) && a.capabilities.length <= 20 && a.capabilities.every(identifier), 'FIELDS', 'Agente no válido.'); refs.add(a.agent_ref);
+      insist(a && typeof a === 'object' && !Array.isArray(a) && Object.keys(a).every(k => ['agent_ref','name','status','capabilities','reason_code'].includes(k)) && identifier(a.agent_ref) && !refs.has(a.agent_ref) && validName(a.name) && ['available','busy','offline','unknown'].includes(a.status) && (!Object.hasOwn(a,'reason_code') || reasons.includes(a.reason_code)) && Array.isArray(a.capabilities) && a.capabilities.length <= 20 && a.capabilities.every(identifier), 'FIELDS', 'Agente no válido.'); refs.add(a.agent_ref);
     }
     return operation('connector:' + connector.id, connector.owner, data, () => {
       const time = now();
       for (const a of data.agents) {
-        db.prepare(`INSERT INTO agency_agents (id,owner,connector,ref,name,status,capabilities,last_seen) VALUES (?,?,?,?,?,?,?,?)
-          ON CONFLICT(connector,ref) DO UPDATE SET name=excluded.name,status=excluded.status,capabilities=excluded.capabilities,last_seen=excluded.last_seen,version=agency_agents.version+1 WHERE agency_agents.revoked=0`).run(randomUUID(), connector.owner, connector.id, a.agent_ref, a.name, a.status, JSON.stringify(a.capabilities), time);
+        db.prepare(`INSERT INTO agency_agents (id,owner,connector,ref,name,status,capabilities,last_seen,reason_code) VALUES (?,?,?,?,?,?,?,?,?)
+          ON CONFLICT(connector,ref) DO UPDATE SET name=excluded.name,status=excluded.status,capabilities=excluded.capabilities,last_seen=excluded.last_seen,reason_code=excluded.reason_code,version=agency_agents.version+1 WHERE agency_agents.revoked=0`).run(randomUUID(), connector.owner, connector.id, a.agent_ref, a.name, a.status, JSON.stringify(a.capabilities), time, a.status === 'offline' ? a.reason_code ?? null : null);
       }
       db.prepare('UPDATE agency_connectors SET last_seen=? WHERE id=? AND revoked=0').run(time, connector.id);
       return { accepted: data.agents.length };
@@ -131,7 +133,7 @@ export function openAgencyConnectors({ directory, now = Date.now }) {
     const time = now();
     const connectors = db.prepare('SELECT id,owner,runtime,revoked,last_seen FROM agency_connectors WHERE owner=? ORDER BY id').all(owner).map(c => ({ id:c.id, owner_id:c.owner, runtime:c.runtime, status:c.revoked ? 'offline' : c.last_seen === null ? 'unknown' : time-c.last_seen <= 60000 ? 'online' : 'offline', last_seen_at:c.last_seen, capabilities:[] }));
     const byId = new Map(connectors.map(c => [c.id,c]));
-    const agents = db.prepare('SELECT * FROM agency_agents WHERE owner=? AND revoked=0 ORDER BY id').all(owner).map(a => ({ id:a.id,name:a.name,owner_id:a.owner,runtime:byId.get(a.connector).runtime,in_office:Boolean(a.in_office),section_id:a.section,status:byId.get(a.connector).status === 'online' && time-a.last_seen <= 60000 ? a.status : 'offline',job_id:null,last_seen_at:a.last_seen,capabilities:JSON.parse(a.capabilities),version:a.version }));
+    const agents = db.prepare('SELECT * FROM agency_agents WHERE owner=? AND revoked=0 ORDER BY id').all(owner).map(a => ({ id:a.id,name:a.name,owner_id:a.owner,runtime:byId.get(a.connector).runtime,in_office:Boolean(a.in_office),section_id:a.section,status:byId.get(a.connector).status === 'online' && time-a.last_seen <= 60000 ? a.status : 'offline',reason_code:byId.get(a.connector).status === 'online' && time-a.last_seen <= 60000 && a.status === 'offline' && reasons.includes(a.reason_code) ? a.reason_code : null,job_id:null,last_seen_at:a.last_seen,capabilities:JSON.parse(a.capabilities),version:a.version }));
     return { version:1, revision:(db.prepare('SELECT revision FROM agency_owner_revision WHERE owner=?').get(owner)?.revision ?? 0), owner_id:owner, agents, jobs:queue.list(owner), sections:db.prepare('SELECT id,name FROM agency_sections WHERE owner=? ORDER BY id').all(owner), learnings:[], connectors, capabilities:{create_agent:false,connect_agent:false,assign:agents.some(a => a.in_office && a.status === 'available')},observed_at:time };
   }
   return { register, authenticate, heartbeat, revoke, report, section, move, snapshot, enqueue, read:queue.read, claim:queue.claim, jobHeartbeat:queue.heartbeat, finish:queue.finish, close() { db.close(); queue.close(); } };

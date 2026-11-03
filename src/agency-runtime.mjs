@@ -113,7 +113,7 @@ async function post(c, path, data, retry = false) {
   try { return await request(); } catch (e) { if (!retry || e.status) throw e; return request(); }
 }
 
-const report = (c, status) => post(c, '/api/agency/connectors/agents', { operation_id: randomUUID(), agents: [{ agent_ref:c.agent_ref, name:c.name, status, capabilities:[] }] });
+const report = (c, status, reason_code) => post(c, '/api/agency/connectors/agents', { operation_id: randomUUID(), agents: [{ agent_ref:c.agent_ref, name:c.name, status, capabilities:[], ...(reason_code ? { reason_code } : {}) }] });
 const heartbeat = c => post(c, '/api/agency/connectors/heartbeat', {});
 const leaseHeartbeat = (c, j) => post(c, `/api/agency/connectors/jobs/${j.id}/heartbeat`, { lease:j.lease });
 const result = (c, j) => post(c, `/api/agency/connectors/jobs/${j.id}/result`, { lease:j.lease, state:j.result.state, summary:j.result.summary, artifact_id:j.result.artifact_id });
@@ -153,7 +153,7 @@ export async function runAgency(c, { once = true, maxSeconds = 1800, execute, si
         } catch { ready = false; reason_code = 'probe_failed'; }
       }
       if (signal?.aborted) return { status:'stopped' };
-      try { await heartbeat(c); await report(c, ready ? 'available' : 'offline'); }
+      try { await heartbeat(c); await report(c, ready ? 'available' : 'offline', ready ? undefined : reason_code); }
       catch (e) { if (once) throw e; await pause(); continue; }
       if (!ready) { if (once) return { status:'offline', reason_code }; await pause(); continue; }
       if (signal?.aborted) return { status:'stopped' };
