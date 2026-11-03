@@ -2,9 +2,9 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadRuntimeConfig, runAgency, runtimeArgv } from '../src/agency-runtime.mjs';
-
-function execute(c, instruction, onTick, signal) {
+export function execute(c, instruction, onTick, signal) {
   return new Promise(resolve => {
     if (process.platform === 'win32') { resolve({ code:null, output:'', reason:'platform' }); return; }
     const env = { HOME:c.profile.home, LANG:'C.UTF-8', PATH:'/usr/bin:/bin', ...(c.provider_env ?? {}) };
@@ -53,7 +53,7 @@ function execute(c, instruction, onTick, signal) {
   });
 }
 
-try {
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) try {
   const args = process.argv.slice(2);
   const configAt = args.indexOf('--config');
   const once = args.includes('--once'), serve = args.includes('--serve');
