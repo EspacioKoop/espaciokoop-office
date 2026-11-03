@@ -453,6 +453,16 @@ function renderAgency() {
     avatar.className = 'avatar agency-avatar'; avatar.setAttribute('aria-label', `Seleccionar ${agent.name}`); avatar.setAttribute('aria-pressed', String(selectedAgent === agent.id)); avatar.draggable = Boolean(eligible);
     avatar.addEventListener('dragstart', event => event.dataTransfer.setData('text/plain', agent.id));
     const info = node('div'); info.append(node('strong', agent.name), node('p', `${agent.status} · ${agent.in_office ? 'en la oficina' : 'fuera de la oficina'} · ${agency.sections.find(s => s.id === agent.section_id)?.name || 'sin sección'}${own ? '' : ' · solo lectura'}`, 'hint'));
+    if (own && agent.status === 'offline') {
+      const reasons = { auth_unavailable:'Falta autenticar el proveedor', runtime_unavailable:'Runtime no disponible', provider_unavailable:'Proveedor no disponible', executable_unavailable:'Ejecutable no disponible', probe_failed:'No se pudo comprobar la disponibilidad' };
+      const reason = Object.hasOwn(reasons, agent.reason_code) ? reasons[agent.reason_code] : null;
+      info.append(node('p', reason || 'Sin conexión o sin un diagnóstico vigente.', 'hint'));
+      if (reason) {
+        const help = node('details'); help.append(node('summary', 'Cómo resolverlo'));
+        help.append(node('p', 'El titular debe preparar la autenticación del proveedor en su perfil Office y comprobar el runtime y su conexión. No envíes tokens por chat ni por la web.', 'hint'));
+        info.append(help);
+      }
+    }
     card.append(avatar, info);
     if (own) {
       const membership = agencyButton(agent.in_office ? 'Retirar' : 'Incorporar', () => agencyAction(`/api/agency/agents/${encodeURIComponent(agent.id)}/membership`, { in_office: !agent.in_office, expected_version: agent.version })); membership.disabled = agencyMutating; card.append(membership);

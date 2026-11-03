@@ -275,6 +275,7 @@ test('Hermes sin imports reales no anuncia disponibilidad ni reclama trabajo', a
     assert.equal(db.prepare('SELECT state FROM work WHERE id=?').get(id).state,'queued'); db.close();
     const snapshot=(await app.request('/api/agency',undefined,{cookie:a.cookie})).body;
     assert.equal(snapshot.agents[0].status,'offline');
+    assert.equal(snapshot.agents[0].reason_code,'runtime_unavailable');
   } finally { await app?.close(); f.cleanup(); }
 });
 
@@ -313,5 +314,6 @@ test('Python con imports instalados y autenticación ausente no anuncia ni recla
     assert.equal(db.prepare('SELECT state FROM work WHERE id=?').get(id).state,'queued'); db.close();
     const snapshot=(await app.request('/api/agency',undefined,{cookie:a.cookie})).body;
     assert.equal(snapshot.agents[0].status,'offline');
+    assert.equal(snapshot.agents[0].reason_code,'auth_unavailable');
   } finally { await app?.close(); f.cleanup(); }
 });
