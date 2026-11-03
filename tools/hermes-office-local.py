@@ -10,6 +10,8 @@ import socket
 import sys
 import uuid
 
+from hermes_office_profile import bootstrap_profile
+
 
 def main():
     os.umask(0o077)
@@ -25,9 +27,7 @@ def main():
         socket.create_connection = no_network
     reason = 'runtime_unavailable'
     try:
-        if not os.environ.get('HERMES_HOME') or not os.environ.get('HOME'):
-            raise RuntimeError()
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        with bootstrap_profile(), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             from hermes_cli.runtime_provider import resolve_runtime_provider
             from run_agent import AIAgent
             kwargs = dict(provider='openai-codex', api_mode='codex_responses',
@@ -53,18 +53,21 @@ def main():
                     agent.model != args.model or agent._fallback_chain):
                 raise RuntimeError()
             if args.check_runtime:
-                print(json.dumps({'ready': True, 'reason_code': 'ready'}), file=sys.__stdout__)
-                return
-            instruction = sys.stdin.read()
-            result = agent.run_conversation(instruction)
-            if (not isinstance(result, dict) or result.get('failed') or result.get('interrupted') or
-                    result.get('partial') or not result.get('completed') or
-                    result.get('provider') != 'openai-codex' or result.get('model') != args.model or
-                    agent.provider != 'openai-codex' or agent.api_mode != 'codex_responses' or
-                    agent.model != args.model or agent._fallback_chain or
-                    not isinstance(result.get('final_response'), str)):
-                raise RuntimeError()
-        sys.stdout.write(result['final_response'])
+                result = None
+            else:
+                instruction = sys.stdin.read()
+                result = agent.run_conversation(instruction)
+                if (not isinstance(result, dict) or result.get('failed') or result.get('interrupted') or
+                        result.get('partial') or not result.get('completed') or
+                        result.get('provider') != 'openai-codex' or result.get('model') != args.model or
+                        agent.provider != 'openai-codex' or agent.api_mode != 'codex_responses' or
+                        agent.model != args.model or agent._fallback_chain or
+                        not isinstance(result.get('final_response'), str)):
+                    raise RuntimeError()
+        if args.check_runtime:
+            print(json.dumps({'ready': True, 'reason_code': 'ready'}))
+        else:
+            sys.stdout.write(result['final_response'])
     except Exception:
         if args.check_runtime:
             print(json.dumps({'ready': False, 'reason_code': reason}))

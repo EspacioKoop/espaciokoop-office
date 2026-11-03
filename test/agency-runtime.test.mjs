@@ -238,8 +238,9 @@ test('HTTP → SQLite → proceso Hermes fixture → resultado, sin inferencia',
 test('wrapper llama a la API local con proveedor explícito y sin gateway', () => {
   const f=setup();
   try {
-    const harness = `import sys,types,runpy,socket\nsocket.socket.connect=lambda *a: (_ for _ in ()).throw(AssertionError('red prohibida'))\np=types.ModuleType('hermes_cli'); p.__path__=[]; sys.modules['hermes_cli']=p\nr=types.ModuleType('hermes_cli.runtime_provider')\ndef resolve_runtime_provider(**k):\n assert k=={'requested':'openai-codex','target_model':'fixture-model'}\n return {'provider':'openai-codex','api_mode':'codex_responses','api_key':'fixture','base_url':'https://invalid'}\nr.resolve_runtime_provider=resolve_runtime_provider; sys.modules[r.__name__]=r\nm=types.ModuleType('run_agent')\nclass Agent:\n def __init__(self,**k):\n  assert k['enabled_toolsets']==[] and k['skip_memory'] and k['skip_context_files'] and k['fallback_model'] is None\n  self.provider=k['provider']; self.api_mode=k['api_mode']; self.model=k['model']; self._fallback_chain=[]\n def run_conversation(self, text):\n  assert text=='entrada literal'\n  return {'completed':True,'provider':'openai-codex','model':'fixture-model','final_response':'respuesta fixture'}\nm.AIAgent=Agent; sys.modules['run_agent']=m\nsys.argv=['wrapper','--model','fixture-model']\nrunpy.run_path(${JSON.stringify(resolve('tools/hermes-office-local.py'))},run_name='__main__')`;
+    const harness = `import sys,types,runpy,socket\nsys.path.insert(0,${JSON.stringify(resolve('tools'))})\nsocket.socket.connect=lambda *a: (_ for _ in ()).throw(AssertionError('red prohibida'))\np=types.ModuleType('hermes_cli'); p.__path__=[]; sys.modules['hermes_cli']=p\nr=types.ModuleType('hermes_cli.runtime_provider')\ndef resolve_runtime_provider(**k):\n assert k=={'requested':'openai-codex','target_model':'fixture-model'}\n return {'provider':'openai-codex','api_mode':'codex_responses','api_key':'fixture','base_url':'https://invalid'}\nr.resolve_runtime_provider=resolve_runtime_provider; sys.modules[r.__name__]=r\nm=types.ModuleType('run_agent')\nclass Agent:\n def __init__(self,**k):\n  assert k['enabled_toolsets']==[] and k['skip_memory'] and k['skip_context_files'] and k['fallback_model'] is None\n  self.provider=k['provider']; self.api_mode=k['api_mode']; self.model=k['model']; self._fallback_chain=[]\n def run_conversation(self, text):\n  assert text=='entrada literal'\n  return {'completed':True,'provider':'openai-codex','model':'fixture-model','final_response':'respuesta fixture'}\nm.AIAgent=Agent; sys.modules['run_agent']=m\nsys.argv=['wrapper','--model','fixture-model']\nrunpy.run_path(${JSON.stringify(resolve('tools/hermes-office-local.py'))},run_name='__main__')`;
     const home=join(f.out,'profile');
+    mkdirSync(join(home,'hermes'),{mode:0o700});
     const result=spawnSync('/usr/bin/python3',['-c',harness],{input:'entrada literal',encoding:'utf8',env:{HOME:home,HERMES_HOME:join(home,'hermes'),PATH:'/usr/bin:/bin'}});
     assert.equal(result.status,0,result.stderr); assert.equal(result.stdout,'respuesta fixture');
   } finally { f.cleanup(); }
@@ -302,7 +303,7 @@ test('Python con imports instalados y autenticación ausente no anuncia ni recla
     const pkg=join(f.root,'hermes_cli'); mkdirSync(pkg); writeFileSync(join(pkg,'__init__.py'),'');
     writeFileSync(join(pkg,'runtime_provider.py'),"def resolve_runtime_provider(*, requested, target_model):\n assert requested == 'openai-codex' and target_model == 'fixture-model'\n raise RuntimeError('secreto sintético no debe salir')\n");
     writeFileSync(join(f.root,'run_agent.py'),"class AIAgent:\n def __init__(self, **kwargs): pass\n def run_conversation(self, text): pass\n");
-    writeFileSync(f.executable,`#!/usr/bin/python3\nimport runpy,sys\nsys.argv=sys.argv[1:]\nrunpy.run_path(sys.argv[0],run_name='__main__')\n`,{mode:0o700});
+    writeFileSync(f.executable,`#!/usr/bin/python3\nimport runpy,sys\nsys.path.insert(0,${JSON.stringify(resolve('tools'))})\nsys.argv=sys.argv[1:]\nrunpy.run_path(sys.argv[0],run_name='__main__')\n`,{mode:0o700});
     app=await start(f.dbdir); const a=await owner(app,'demo-aurora'); const agent=await enlist(app,a.cookie,a.connector.token);
     const id=(await app.request('/api/agency/jobs',{operation_id:'auth-missing',title:'Pendiente',instruction:'prueba',agent_id:agent},{cookie:a.cookie})).body.id;
     f.makeConfig(app.origin,a.connector.token,{runtime:'hermes',provider:'openai-codex'});
@@ -316,4 +317,33 @@ test('Python con imports instalados y autenticación ausente no anuncia ni recla
     assert.equal(snapshot.agents[0].status,'offline');
     assert.equal(snapshot.agents[0].reason_code,'auth_unavailable');
   } finally { await app?.close(); f.cleanup(); }
+});
+
+test('Hermes rechaza enlace colgante en directorio de perfil antes de ejecutar', () => {
+  const f=setup();
+  try {
+    f.makeConfig('http://127.0.0.1:1234','a'.repeat(64),{runtime:'hermes',provider:'openai-codex'});
+    symlinkSync('ausente',join(f.out,'profile','hermes'));
+    assert.throws(() => loadRuntimeConfig(f.configPath));
+    assert.equal(existsSync(join(f.repo,'count')),false);
+  } finally { f.cleanup(); }
+});
+
+test('Hermes rechaza enlaces, hojas prohibidas y directorios no privados', () => {
+  const f=setup();
+  try {
+    f.makeConfig('http://127.0.0.1:1234','a'.repeat(64),{runtime:'hermes',provider:'openai-codex'});
+    const home=join(f.out,'profile','hermes'), target=join(f.out,'profile','target');
+    mkdirSync(target,{mode:0o700}); symlinkSync(target,home);
+    assert.throws(() => loadRuntimeConfig(f.configPath)); rmSync(home);
+    writeFileSync(home,'fixture'); assert.throws(() => loadRuntimeConfig(f.configPath)); rmSync(home);
+    mkdirSync(home,{mode:0o755}); assert.throws(() => loadRuntimeConfig(f.configPath)); chmodSync(home,0o700);
+    for (const name of ['config.yaml','.env','hooks','plugins','mcp.json']) {
+      const path=join(home,name);
+      symlinkSync('missing',path); assert.throws(() => loadRuntimeConfig(f.configPath)); rmSync(path);
+      writeFileSync(path,'fixture'); assert.throws(() => loadRuntimeConfig(f.configPath)); rmSync(path);
+    }
+    assert.equal(loadRuntimeConfig(f.configPath).runtime,'hermes');
+    assert.equal(existsSync(join(f.repo,'count')),false);
+  } finally { f.cleanup(); }
 });

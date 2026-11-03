@@ -56,9 +56,17 @@ export function loadRuntimeConfig(path, verifyWorkspace = () => true) {
   noLinks(c.profile.home);
   privateDirectory(c.profile.home);
   if (c.runtime === 'hermes' && c.provider_env !== undefined) fail('Hermes requiere autenticación propia del perfil de proyecto.');
-  if (c.runtime === 'hermes' && existsSync(join(c.profile.home, 'hermes'))) {
-    const hermesHome = join(c.profile.home, 'hermes'); noLinks(hermesHome); privateDirectory(hermesHome);
-    for (const name of ['config.yaml', '.env', 'hooks', 'plugins', 'mcp.json']) if (existsSync(join(hermesHome, name))) fail('Hermes requiere un perfil de proyecto sin configuración, hooks ni MCP.');
+  if (c.runtime === 'hermes') {
+    const hermesHome = join(c.profile.home, 'hermes');
+    let present = true;
+    try { lstatSync(hermesHome); } catch (error) { if (error.code !== 'ENOENT') throw error; present = false; }
+    if (present) {
+      noLinks(hermesHome); privateDirectory(hermesHome);
+      for (const name of ['config.yaml', '.env', 'hooks', 'plugins', 'mcp.json']) {
+        try { lstatSync(join(hermesHome, name)); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+        fail('Hermes requiere un perfil de proyecto sin configuración, hooks ni MCP.');
+      }
+    }
   }
   if (!Number.isSafeInteger(c.timeout_seconds) || c.timeout_seconds < 1 || c.timeout_seconds > 1800) fail('Timeout no válido.');
   if (c.provider_env !== undefined && (!c.provider_env || typeof c.provider_env !== 'object' || Array.isArray(c.provider_env) || Object.entries(c.provider_env).some(([k,v]) => !['ANTHROPIC_API_KEY','OPENAI_API_KEY'].includes(k) || (k === 'ANTHROPIC_API_KEY' && c.provider !== 'anthropic') || (k === 'OPENAI_API_KEY' && c.provider !== 'openai-codex') || typeof v !== 'string' || !v))) fail('Entorno de proveedor no válido.');
