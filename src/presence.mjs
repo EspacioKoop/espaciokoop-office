@@ -52,14 +52,22 @@ export function createPresenceRegistry({ directory, policy, now = Date.now, onli
     const id = key(agentId, projectId); const previous = beats.get(id);
     insist(!previous || sequence > previous.sequence, 'PRESENCE_CONFLICT', 'Heartbeat duplicado o fuera de orden.', 409);
     const seenAt = now();
+    insist(Number.isSafeInteger(seenAt) && seenAt >= 0 && (!previous || seenAt >= previous.seenAt),
+      'PRESENCE_TIME', 'Reloj de presencia no válido o retrocedido.', 409);
     beats.set(id, { sequence, seenAt });
     return { agentId, projectId, status: 'online', seenAt };
   }
 
   function status(agentId, projectId) {
+    if (revokedAgents.has(agentId)) return { status: 'offline', seenAt: null };
     const beat = beats.get(key(agentId, projectId));
-    if (!beat) return { status: 'offline', seenAt: null };
-    const age = Math.max(0, now() - beat.seenAt);
+    // Un agente registrado sin heartbeat autenticado no equivale a uno desconectado.
+    if (!beat) return { status: 'unknown', seenAt: null };
+    const current = now();
+    if (!Number.isSafeInteger(current) || current < beat.seenAt) {
+      return { status: 'unknown', seenAt: beat.seenAt };
+    }
+    const age = current - beat.seenAt;
     if (age > ttl) return { status: 'offline', seenAt: beat.seenAt };
     return { status: age > onlineFor ? 'stale' : 'online', seenAt: beat.seenAt };
   }

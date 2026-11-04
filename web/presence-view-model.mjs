@@ -15,7 +15,8 @@ function sanitizeHtml(value, maxLength = 80) {
     .replace(/'/g, '&#39;');
 }
 
-const VALID_STATUSES = new Set(['online', 'stale', 'offline']);
+// 'unknown' significa que no existe todavía una señal temporal fiable; no es 'offline'.
+const VALID_STATUSES = new Set(['online', 'stale', 'offline', 'unknown']);
 const AGENT_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}\/[a-z0-9][a-z0-9-]{0,39}$/;
 const OWNER_ID_PATTERN = /^[a-z0-9-]{1,40}$/;
 

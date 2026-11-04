@@ -40,7 +40,7 @@ test('presencia HTTP: agente autenticado, lectura por sesión y estados caducabl
   assert.equal((await request('/api/presence')).status, 401);
   const cookie = await login('aurora');
   const read = async () => (await request('/api/presence', { cookie })).json();
-  assert.ok((await read()).agents.every(agent => agent.status === 'offline'));
+  assert.ok((await read()).agents.every(agent => agent.status === 'unknown'));
   const response = await beat(0); assert.equal(response.status, 200);
   assert.equal((await response.json()).agentId, 'marea/worker');
   assert.equal((await read()).agents[1].status, 'online');
@@ -58,7 +58,7 @@ test('cookie de equipo, agente declarado y clave de otro propietario no suplanta
   assert.equal((await beat(0, { data: { projectId: 'demo/archivo', sequence: 0 } })).status, 403);
   assert.equal((await beat(0, { key: 'synthetic-aurora-agent' })).status, 200);
   const data = await (await request('/api/presence', { cookie })).json();
-  assert.equal(data.agents[0].status, 'online'); assert.equal(data.agents[1].status, 'offline');
+  assert.equal(data.agents[0].status, 'online'); assert.equal(data.agents[1].status, 'unknown');
   assert.equal((await request('/api/presence?projectId=demo/archivo', { cookie })).status, 400);
 });
 
@@ -99,7 +99,7 @@ test('revocación de agente por directorio invalida su clave y deja lectura vac�
   assert.equal(recovered.status, 200);
   const data = await recovered.json();
   assert.deepEqual(data.agents.map(agent => [agent.id, agent.status, agent.seenAt]), [
-    ['aurora/worker', 'offline', null]
+    ['aurora/worker', 'unknown', null]
   ]);
   assert.doesNotMatch(JSON.stringify(data), /synthetic-|keyHash|marea\/worker/);
 });
@@ -141,8 +141,8 @@ for (const kind of ['policy', 'credential', 'agent-removal', 'broken-config']) {
     const read = await request('/api/presence', { cookie });
     if (read.status === 401) {
       const fresh = await request('/api/presence', { cookie: await login('marea') });
-      assert.ok((await fresh.json()).agents.every(agent => agent.status === 'offline'));
-    } else { assert.equal(read.status, 200); assert.ok((await read.json()).agents.every(agent => agent.status === 'offline')); }
+      assert.ok((await fresh.json()).agents.every(agent => agent.status === 'unknown'));
+    } else { assert.equal(read.status, 200); assert.ok((await read.json()).agents.every(agent => agent.status === 'unknown')); }
     assert.equal((await beat(101)).status, 200);
   });
 }
@@ -209,5 +209,5 @@ test('política rota observada por API retira presencia; recuperarla no resucita
   assert.equal((await request('/api/snapshot', { cookie })).status, 503);
   policy = structuredClone(demoPolicy);
   const result = await request('/api/presence', { cookie }); assert.equal(result.status, 200);
-  assert.ok((await result.json()).agents.every(agent => agent.status === 'offline'));
+  assert.ok((await result.json()).agents.every(agent => agent.status === 'unknown'));
 });

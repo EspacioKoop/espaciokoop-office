@@ -83,7 +83,7 @@ async function createUiClient() {
   return { ...api, get, document, window, setTransport: fn => { transport = fn; } };
 }
 
-test('Accesibilidad Panel Presencia: estructura de estados online, stale, offline', () => {
+test('Accesibilidad Panel Presencia: online, stale, offline y unknown sin heartbeat', () => {
   const directory = [
     { id: 'aurora/atlas', label: 'Atlas', ownerId: 'aurora', projects: ['demo/observatorio'] },
     { id: 'marea/bruma', label: 'Bruma', ownerId: 'marea', projects: ['demo/observatorio'] }
@@ -94,10 +94,10 @@ test('Accesibilidad Panel Presencia: estructura de estados online, stale, offlin
 
   let snap = registry.snapshot({ memberId: 'marea', projectId: 'demo/observatorio' });
   const onlineAgent = snap.find(a => a.id === 'aurora/atlas');
-  const offlineAgent = snap.find(a => a.id === 'marea/bruma');
+  const unknownAgent = snap.find(a => a.id === 'marea/bruma');
 
   assert.equal(onlineAgent.status, 'online');
-  assert.equal(offlineAgent.status, 'offline');
+  assert.equal(unknownAgent.status, 'unknown');
 
   // Transición a stale
   time = 1006;

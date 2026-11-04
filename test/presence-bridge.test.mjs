@@ -89,7 +89,7 @@ test('prepare/commit/release: ciclo de presencia completo (altas, bajas y evento
 
   let view = bridge.read('aurora', demoPolicy);
   assert.equal(view.agents.find(a => a.id === 'aurora/atlas').status, 'online');
-  assert.equal(view.agents.find(a => a.id === 'marea/bruma').status, 'offline');
+  assert.equal(view.agents.find(a => a.id === 'marea/bruma').status, 'unknown');
 
   // 2. Alta de bruma (segundo agente)
   const handleBruma = bridge.prepare('synthetic-bruma-key', demoPolicy);
